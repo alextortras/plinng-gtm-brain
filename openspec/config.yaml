@@ -1,0 +1,49 @@
+schema: spec-driven
+
+context: |
+  Project: Plinng GTM Brain — an internal AI-driven Revenue Operating System for B2B SaaS.
+  Domain: Go-To-Market intelligence for micro-SMEs (1-4 employees) in Home Services.
+  Core framework: Winning by Design Bowtie Funnel (recurring revenue, not linear acquisition).
+
+  Tech stack:
+    - Frontend/Backend: Next.js 14+ (App Router)
+    - Database & Auth: Supabase (PostgreSQL) with Google Workspace SSO
+    - UI: Tremor (charts/dashboards) + Shadcn/UI
+    - AI/LLM: Vercel AI SDK (Claude 3.5 Sonnet or GPT-4o)
+    - Hosting: Vercel
+    - Alerting: Slack Webhooks
+
+  Key constraints:
+    - Read-only access to all external integrations (HubSpot, Google Ads, Meta Ads). Never execute changes in external platforms.
+    - Data ingestion via scheduled jobs 3x/day (Morning, Noon, EOD).
+    - No raw clickstreams — only aggregated daily snapshots.
+
+  Business rules:
+    - Target CAC Payback Period <= 6 months
+    - Churn rate < 5%
+    - ARPA range: 80€–130€
+    - ICP: Home Services vertical, micro-SME (1-4 employees)
+    - Markets: United States and Spain (distinct baseline evaluations)
+    - Sales motions: Outbound, Partners, Paid Ads, Organic, PLG
+
+  Architecture:
+    - Drill-down dashboard: Global → Stage/Motion → Rep Leaderboards (SDR, AE, CSM)
+    - AI scoring: SDR Propensity Score, AE Deal Momentum Score, CSM Health Score
+    - AI "Brain": Prescriptive insights engine with 3 strategy modes (Maximize Revenue / Efficiency / Activation)
+    - Forecasting: Rolling 90-day forecast (Best Case, Commit, Most Likely) segmented by revenue type and motion
+
+  Implementation phases:
+    1. Database & Core Schema (Supabase PostgreSQL)
+    2. TypeScript Interfaces & Mock Data Seeding
+    3. Analytics API & Vercel AI Setup
+    4. UI Development (Tremor dashboards, leaderboards, AI inbox)
+    5. Forecasting Engine
+
+rules:
+  proposal:
+    - Respect read-only constraint on all external integrations
+    - Separate US and Spain market logic in all data evaluations
+    - Always reference the relevant Bowtie Funnel stage
+  tasks:
+    - Align tasks to the 5 implementation phases
+    - Include acceptance criteria referencing business rules (CAC, churn, ARPA)
