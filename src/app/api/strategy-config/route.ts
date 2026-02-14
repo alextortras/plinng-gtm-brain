@@ -5,8 +5,15 @@ import {
   updateStrategyConfig,
   StrategyConfigUpdate,
 } from '@/lib/queries/strategy-config';
+import { isDemoMode, resolveMockData } from '@/lib/mock-data';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Demo mode: return mock data
+  if (isDemoMode()) {
+    const mockData = resolveMockData(request.url);
+    return NextResponse.json({ data: mockData });
+  }
+
   try {
     await getAuthenticatedUser();
   } catch (e) {

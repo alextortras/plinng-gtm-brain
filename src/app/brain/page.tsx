@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { Brain, Loader2 } from 'lucide-react';
 import { BrainInsight } from '@/lib/brain/insights';
+import { isDemoMode, MOCK_BRAIN_INSIGHTS } from '@/lib/mock-data';
 
 const CATEGORY_OPTIONS = [
   { value: '', label: 'All Categories' },
@@ -40,6 +41,14 @@ export default function BrainPage() {
     setError(null);
     setRawStream('');
     setInsights([]);
+
+    // Demo mode: return pre-built insights after a short delay
+    if (isDemoMode()) {
+      await new Promise((r) => setTimeout(r, 800));
+      setInsights(MOCK_BRAIN_INSIGHTS);
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch('/api/brain/insights', {

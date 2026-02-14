@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { RevenueForecast, ForecastScenario, RevenueType } from '@/types/database';
 import { TrendingUp, Loader2 } from 'lucide-react';
+import { isDemoMode } from '@/lib/mock-data';
 import {
   BarChart,
   Bar,
@@ -67,6 +68,15 @@ export default function ForecastsPage() {
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
+
+    // Demo mode: just simulate a delay and refetch mock data
+    if (isDemoMode()) {
+      await new Promise((r) => setTimeout(r, 600));
+      refetch();
+      setGenerating(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/forecasts/generate', { method: 'POST' });
       if (!res.ok) {

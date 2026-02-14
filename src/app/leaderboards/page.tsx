@@ -5,8 +5,14 @@ import { useApi } from '@/hooks/use-api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RepKpi } from '@/types/database';
+import { isDemoMode, REP_NAMES } from '@/lib/mock-data';
 
 type RoleTab = 'sdr' | 'ae' | 'csm';
+
+function repName(userId: string): string {
+  if (isDemoMode() && REP_NAMES[userId]) return REP_NAMES[userId];
+  return userId.slice(0, 8) + '...';
+}
 
 const TABS: { value: RoleTab; label: string }[] = [
   { value: 'sdr', label: 'SDRs' },
@@ -74,7 +80,7 @@ function SdrTable({ kpis }: { kpis: RepKpi[] }) {
           <tr key={row.userId} className="border-b border-border/50">
             <td className="py-3 font-medium">{i + 1}</td>
             <td className="py-3">
-              <span className="font-medium">{row.userId.slice(0, 8)}...</span>
+              <span className="font-medium">{repName(row.userId)}</span>
             </td>
             <td className="py-3 text-right font-semibold">{row.totalSals}</td>
             <td className="py-3 text-right">{formatPercent(row.avgConversion)}</td>
@@ -115,7 +121,7 @@ function AeTable({ kpis }: { kpis: RepKpi[] }) {
           <tr key={row.userId} className="border-b border-border/50">
             <td className="py-3 font-medium">{i + 1}</td>
             <td className="py-3">
-              <span className="font-medium">{row.userId.slice(0, 8)}...</span>
+              <span className="font-medium">{repName(row.userId)}</span>
             </td>
             <td className="py-3 text-right font-semibold">{formatCurrency(row.totalClosedWon)}</td>
             <td className="py-3 text-right">{formatCurrency(row.totalExpansion)}</td>
@@ -161,7 +167,7 @@ function CsmTable({ kpis }: { kpis: RepKpi[] }) {
           <tr key={row.userId} className="border-b border-border/50">
             <td className="py-3 font-medium">{i + 1}</td>
             <td className="py-3">
-              <span className="font-medium">{row.userId.slice(0, 8)}...</span>
+              <span className="font-medium">{repName(row.userId)}</span>
             </td>
             <td className="py-3 text-right font-semibold">{formatPercent(row.avgGrr)}</td>
             <td className="py-3 text-right">

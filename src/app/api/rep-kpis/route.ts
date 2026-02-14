@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser, AuthError } from '@/lib/auth';
 import { getRepKpis, RepKpisFilters } from '@/lib/queries/rep-kpis';
 import { RepRole } from '@/types/database';
+import { isDemoMode, resolveMockData } from '@/lib/mock-data';
 
 export async function GET(request: NextRequest) {
+  // Demo mode: return mock data
+  if (isDemoMode()) {
+    const mockData = resolveMockData(request.url);
+    return NextResponse.json({ data: mockData });
+  }
+
   try {
     await getAuthenticatedUser();
   } catch (e) {
