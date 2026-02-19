@@ -52,8 +52,6 @@ interface PhaseMetricsTableProps {
   data: PhaseTableData;
   period: PeriodType;
   onPeriodChange: (period: PeriodType) => void;
-  /** When true, show a prompt to select a motion instead of the table */
-  showMotionPrompt?: boolean;
 }
 
 export function PhaseMetricsTable({
@@ -61,17 +59,7 @@ export function PhaseMetricsTable({
   data,
   period,
   onPeriodChange,
-  showMotionPrompt,
 }: PhaseMetricsTableProps) {
-  if (showMotionPrompt) {
-    return (
-      <div className="flex h-40 items-center justify-center">
-        <p className="text-muted-foreground">
-          Select a motion to view the acquisition funnel metrics.
-        </p>
-      </div>
-    );
-  }
 
   // Collect unique groups in order
   const groups: string[] = [];

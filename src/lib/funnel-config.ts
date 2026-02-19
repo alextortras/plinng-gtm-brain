@@ -117,9 +117,22 @@ const ORGANIC_FUNNEL: FunnelConfig = {
 const PARTNERS_SLG_FUNNEL = OUTBOUND_SLG_FUNNEL;
 const PARTNERS_PLG_FUNNEL = OUTBOUND_PLG_FUNNEL;
 
+// ---- Acquisition: All Motions (blended) ----
+
+const ALL_MOTIONS_ACQUISITION: FunnelConfig = {
+  rows: [
+    { key: 'first_stage_entries', label: 'Users', format: 'number', group: 'volume' },
+    { key: 'win', label: 'Wins', format: 'number', group: 'volume' },
+    { key: 'first_to_win', label: '% Users → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'total_investment', label: 'Total Investment', format: 'currency', group: 'cost' },
+    { key: 'blended_cac', label: 'Blended CAC', format: 'currency', group: 'cost', summary: 'avg' },
+  ],
+};
+
 // ---- Lookup maps ----
 
 export const ACQUISITION_FUNNELS: Record<string, FunnelConfig> = {
+  '': ALL_MOTIONS_ACQUISITION,
   paid_ads: PAID_ADS_FUNNEL,
   plg: PLG_FUNNEL,
   outbound_slg: OUTBOUND_SLG_FUNNEL,
@@ -182,5 +195,5 @@ export const MOTION_API_MAP: Record<string, string> = {
 export function getPhaseFunnel(phase: string, motion: string): FunnelConfig {
   if (phase === 'retention') return RETENTION_CONFIG;
   if (phase === 'expansion') return EXPANSION_CONFIG;
-  return ACQUISITION_FUNNELS[motion] || PAID_ADS_FUNNEL;
+  return ACQUISITION_FUNNELS[motion] ?? ALL_MOTIONS_ACQUISITION;
 }

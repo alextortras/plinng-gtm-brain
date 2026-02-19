@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
 import { PhaseMetricsTable } from '@/components/phase-metrics-table';
+import { PhaseMetricsChart } from '@/components/phase-metrics-chart';
 import { DailyFunnelMetric } from '@/types/database';
 import {
   MOTION_OPTIONS,
@@ -20,6 +21,11 @@ const PHASE_TABS = [
   { value: 'acquisition', label: 'Acquisition' },
   { value: 'retention', label: 'Retention' },
   { value: 'expansion', label: 'Expansion' },
+];
+
+const VIEW_TABS = [
+  { value: 'table', label: 'Table' },
+  { value: 'graph', label: 'Graph' },
 ];
 
 const PHASE_STAGES: Record<string, readonly string[]> = {
@@ -53,7 +59,9 @@ export default function DashboardPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [phase, setPhase] = useState('acquisition');
-  const [period, setPeriod] = useState<PeriodType>('weekly');
+  const [view, setView] = useState('table');
+  const [tablePeriod, setTablePeriod] = useState<PeriodType>('weekly');
+  const [chartPeriod, setChartPeriod] = useState<PeriodType>('weekly');
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
@@ -92,13 +100,18 @@ export default function DashboardPage() {
   }, [phaseMetrics]);
 
   const funnelConfig = useMemo(
-    () => getPhaseFunnel(phase, motion || 'paid_ads'),
+    () => getPhaseFunnel(phase, motion),
     [phase, motion]
   );
 
   const tableData = useMemo(
-    () => generatePhaseTableData(funnelConfig, period, phase, from || undefined, to || undefined),
-    [funnelConfig, period, phase, from, to]
+    () => generatePhaseTableData(funnelConfig, tablePeriod, phase, from || undefined, to || undefined),
+    [funnelConfig, tablePeriod, phase, from, to]
+  );
+
+  const chartData = useMemo(
+    () => generatePhaseTableData(funnelConfig, chartPeriod, phase, from || undefined, to || undefined),
+    [funnelConfig, chartPeriod, phase, from, to]
   );
 
   return (
@@ -172,16 +185,26 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Metrics Table */}
+        {/* Table / Graph sub-tabs */}
         <Card className="mt-4">
           <CardContent className="pt-4">
-            <PhaseMetricsTable
-              config={funnelConfig}
-              data={tableData}
-              period={period}
-              onPeriodChange={setPeriod}
-              showMotionPrompt={phase === 'acquisition' && !motion}
-            />
+            <Tabs tabs={VIEW_TABS} defaultValue="table" onValueChange={setView}>
+              {view === 'table' ? (
+                <PhaseMetricsTable
+                  config={funnelConfig}
+                  data={tableData}
+                  period={tablePeriod}
+                  onPeriodChange={setTablePeriod}
+                />
+              ) : (
+                <PhaseMetricsChart
+                  config={funnelConfig}
+                  data={chartData}
+                  period={chartPeriod}
+                  onPeriodChange={setChartPeriod}
+                />
+              )}
+            </Tabs>
           </CardContent>
         </Card>
       </Tabs>

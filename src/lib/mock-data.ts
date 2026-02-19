@@ -662,7 +662,23 @@ export function generatePhaseTableData(
     return { columns, values };
   }
 
-  // --- Acquisition ---
+  // --- Acquisition: All Motions (blended) ---
+  if (config.rows.some((r) => r.key === 'first_stage_entries')) {
+    for (const col of columns) {
+      const firstStage = Math.round(rngRange(rng, 800, 1600) * pMul);
+      const wins = Math.round(firstStage * rngRange(rng, 0.08, 0.18));
+      const investment = Math.round(rngRange(rng, 5000, 15000) * pMul);
+
+      values['first_stage_entries'][col] = firstStage;
+      values['win'][col] = wins;
+      values['first_to_win'][col] = firstStage > 0 ? wins / firstStage : 0;
+      values['total_investment'][col] = investment;
+      values['blended_cac'][col] = wins > 0 ? investment / wins : 0;
+    }
+    return { columns, values };
+  }
+
+  // --- Acquisition: Specific motion ---
   const volumeRows = config.rows.filter((r) => r.group === 'volume' && r.format === 'number');
   const investmentRow = config.rows.find((r) => r.key === 'investment');
   const conversionRows = config.rows.filter((r) => r.group === 'conversion');
