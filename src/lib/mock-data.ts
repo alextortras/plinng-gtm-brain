@@ -10,6 +10,9 @@ import type {
   RevenueForecast,
   StrategyConfig,
   AccountScore,
+  Integration,
+  IntegrationFieldMapping,
+  IntegrationSync,
   FunnelStage,
   SalesMotion,
   Market,
@@ -19,6 +22,8 @@ import type {
 } from '@/types/database';
 import type { BrainInsight } from '@/lib/brain/insights';
 import type { FunnelConfig, PeriodType } from '@/lib/funnel-config';
+import type { IntegrationWithStatus } from '@/types/integrations';
+import { INTEGRATION_CATALOG } from '@/lib/integrations/catalog';
 
 // --- Seeded PRNG (mulberry32) for deterministic values ---
 
@@ -483,6 +488,251 @@ export const MOCK_BRAIN_INSIGHTS: BrainInsight[] = [
   },
 ];
 
+// --- Mock Integration Data ---
+
+const MOCK_INTEGRATIONS: Integration[] = [
+  {
+    id: 'mock-int-hubspot',
+    provider: 'hubspot',
+    status: 'connected',
+    auth_type: 'oauth2',
+    credentials_encrypted: null,
+    account_name: 'Plinng Demo (Hub ID: 12345678)',
+    account_id: '12345678',
+    scopes: ['crm.objects.deals.read', 'crm.objects.contacts.read', 'crm.schemas.deals.read', 'crm.schemas.contacts.read'],
+    config: { pipeline_id: 'default' },
+    error_message: null,
+    connected_at: daysAgo(30) + 'T10:00:00Z',
+    connected_by: 'a1000000-0000-0000-0000-000000000001',
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-int-amplitude',
+    provider: 'amplitude',
+    status: 'connected',
+    auth_type: 'api_key',
+    credentials_encrypted: null,
+    account_name: 'Plinng Production',
+    account_id: 'amp-proj-001',
+    scopes: [],
+    config: {},
+    error_message: null,
+    connected_at: daysAgo(15) + 'T14:30:00Z',
+    connected_by: 'a1000000-0000-0000-0000-000000000001',
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-int-google-ads',
+    provider: 'google_ads',
+    status: 'disconnected',
+    auth_type: 'oauth2',
+    credentials_encrypted: null,
+    account_name: null,
+    account_id: null,
+    scopes: [],
+    config: {},
+    error_message: null,
+    connected_at: null,
+    connected_by: null,
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-int-meta-ads',
+    provider: 'meta_ads',
+    status: 'error',
+    auth_type: 'oauth2',
+    credentials_encrypted: null,
+    account_name: 'Plinng Ads Account',
+    account_id: 'act_987654321',
+    scopes: ['ads_read'],
+    config: {},
+    error_message: 'OAuth token expired. Please reconnect to restore access.',
+    connected_at: daysAgo(45) + 'T09:15:00Z',
+    connected_by: 'a1000000-0000-0000-0000-000000000001',
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+];
+
+const MOCK_FIELD_MAPPINGS: IntegrationFieldMapping[] = [
+  {
+    id: 'mock-fm-map-1',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'deals',
+    source_field: 'lifecyclestage',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'funnel_stage',
+    status: 'mapped',
+    transform_rule: { type: 'value_map', value_map: { subscriber: 'lead', lead: 'lead', marketingqualifiedlead: 'sql', salesqualifiedlead: 'sql', opportunity: 'sal', customer: 'win', evangelist: 'win' } },
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-2',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'deals',
+    source_field: 'amount',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'revenue',
+    status: 'mapped',
+    transform_rule: null,
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-3',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'deals',
+    source_field: 'pipeline',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'pipeline_value',
+    status: 'mapped',
+    transform_rule: null,
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-4',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'deals',
+    source_field: 'hs_analytics_source',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'motion',
+    status: 'mapped',
+    transform_rule: { type: 'value_map', value_map: { ORGANIC_SEARCH: 'organic', ORGANIC_SOCIAL: 'organic', PAID_SEARCH: 'paid_ads', PAID_SOCIAL: 'paid_ads', DIRECT_TRAFFIC: 'organic', REFERRALS: 'partners', OFFLINE_SOURCES: 'outbound', EMAIL_MARKETING: 'outbound', OTHER_CAMPAIGNS: 'outbound' } },
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-date',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'deals',
+    source_field: 'closedate',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'date',
+    status: 'mapped',
+    transform_rule: { type: 'date_extract' },
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-market',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'deals',
+    source_field: 'hs_country',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'market',
+    status: 'mapped',
+    transform_rule: { type: 'value_map', value_map: { 'United States': 'us', US: 'us', Spain: 'spain', 'España': 'spain' } },
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-5',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'contacts',
+    source_field: 'lifecyclestage',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'funnel_stage',
+    status: 'mapped',
+    transform_rule: null,
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-6',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'contacts',
+    source_field: 'num_associated_deals',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'leads_count',
+    status: 'unmapped',
+    transform_rule: null,
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+];
+
+const MOCK_SYNC_HISTORY: IntegrationSync[] = [
+  {
+    id: 'mock-sync-1',
+    integration_id: 'mock-int-hubspot',
+    status: 'success',
+    started_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 4 * 60 * 60 * 1000 + 45000).toISOString(),
+    records_synced: 342,
+    records_failed: 0,
+    error_details: null,
+    created_at: isoNow(),
+  },
+  {
+    id: 'mock-sync-2',
+    integration_id: 'mock-int-hubspot',
+    status: 'success',
+    started_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 12 * 60 * 60 * 1000 + 52000).toISOString(),
+    records_synced: 338,
+    records_failed: 2,
+    error_details: null,
+    created_at: isoNow(),
+  },
+  {
+    id: 'mock-sync-3',
+    integration_id: 'mock-int-hubspot',
+    status: 'error',
+    started_at: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 20 * 60 * 60 * 1000 + 12000).toISOString(),
+    records_synced: 156,
+    records_failed: 8,
+    error_details: 'Rate limit exceeded after 156 records. HubSpot API returned 429. Retry scheduled.',
+    created_at: isoNow(),
+  },
+  {
+    id: 'mock-sync-4',
+    integration_id: 'mock-int-hubspot',
+    status: 'success',
+    started_at: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 28 * 60 * 60 * 1000 + 41000).toISOString(),
+    records_synced: 340,
+    records_failed: 0,
+    error_details: null,
+    created_at: isoNow(),
+  },
+  {
+    id: 'mock-sync-5',
+    integration_id: 'mock-int-amplitude',
+    status: 'success',
+    started_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 6 * 60 * 60 * 1000 + 30000).toISOString(),
+    records_synced: 1250,
+    records_failed: 0,
+    error_details: null,
+    created_at: isoNow(),
+  },
+];
+
+function generateMockIntegrationsWithStatus(): IntegrationWithStatus[] {
+  return INTEGRATION_CATALOG.map((catalog) => {
+    const dbRecord = MOCK_INTEGRATIONS.find((i) => i.provider === catalog.provider);
+    const syncs = MOCK_SYNC_HISTORY.filter((s) => s.integration_id === dbRecord?.id);
+    const lastSync = syncs.sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
+
+    return {
+      ...catalog,
+      status: dbRecord?.status ?? 'disconnected',
+      account_name: dbRecord?.account_name ?? null,
+      connected_at: dbRecord?.connected_at ?? null,
+      error_message: dbRecord?.error_message ?? null,
+      last_sync_at: lastSync?.started_at ?? null,
+      last_sync_errors: syncs.filter((s) => s.status === 'error').length,
+      integration_id: dbRecord?.id ?? null,
+    };
+  });
+}
+
 // --- Mock data registry with param filtering ---
 
 type MockResolver = (url: string) => unknown;
@@ -529,6 +779,104 @@ const MOCK_REGISTRY: Record<string, MockResolver> = {
   '/api/account-scores': () => {
     return generateAccountScores();
   },
+
+  '/api/integrations': () => {
+    return generateMockIntegrationsWithStatus();
+  },
+
+  '/api/integrations/hubspot': () => {
+    const integration = MOCK_INTEGRATIONS.find((i) => i.provider === 'hubspot');
+    if (!integration) return null;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { credentials_encrypted: _cred, ...safe } = integration;
+    return safe;
+  },
+
+  '/api/integrations/amplitude': () => {
+    const integration = MOCK_INTEGRATIONS.find((i) => i.provider === 'amplitude');
+    if (!integration) return null;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { credentials_encrypted: _cred, ...safe } = integration;
+    return safe;
+  },
+
+  '/api/integrations/google_ads': () => {
+    const integration = MOCK_INTEGRATIONS.find((i) => i.provider === 'google_ads');
+    if (!integration) return null;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { credentials_encrypted: _cred, ...safe } = integration;
+    return safe;
+  },
+
+  '/api/integrations/meta_ads': () => {
+    const integration = MOCK_INTEGRATIONS.find((i) => i.provider === 'meta_ads');
+    if (!integration) return null;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { credentials_encrypted: _cred, ...safe } = integration;
+    return safe;
+  },
+
+  '/api/integrations/hubspot/mappings': () => {
+    return MOCK_FIELD_MAPPINGS.filter((m) => m.integration_id === 'mock-int-hubspot');
+  },
+
+  '/api/integrations/hubspot/sync': () => {
+    return MOCK_SYNC_HISTORY.filter((s) => s.integration_id === 'mock-int-hubspot');
+  },
+
+  '/api/integrations/hubspot/fields': () => {
+    return {
+      deals: [
+        { name: 'dealstage', label: 'Deal Stage', type: 'enumeration' },
+        { name: 'lifecyclestage', label: 'Lifecycle Stage', type: 'enumeration' },
+        { name: 'amount', label: 'Amount', type: 'number' },
+        { name: 'pipeline', label: 'Pipeline', type: 'enumeration' },
+        { name: 'closedate', label: 'Close Date', type: 'date' },
+        { name: 'hs_analytics_source', label: 'Original Source', type: 'enumeration' },
+        { name: 'hs_country', label: 'Country', type: 'enumeration' },
+        { name: 'createdate', label: 'Create Date', type: 'date' },
+        { name: 'dealname', label: 'Deal Name', type: 'string' },
+        { name: 'hs_deal_stage_probability', label: 'Deal Probability', type: 'number' },
+      ],
+      contacts: [
+        { name: 'lifecyclestage', label: 'Lifecycle Stage', type: 'enumeration' },
+        { name: 'num_associated_deals', label: 'Associated Deals', type: 'number' },
+        { name: 'email', label: 'Email', type: 'string' },
+        { name: 'company', label: 'Company', type: 'string' },
+        { name: 'hs_analytics_source', label: 'Original Source', type: 'enumeration' },
+      ],
+    };
+  },
+
+  '/api/integrations/hubspot/test': () => {
+    return { success: true, message: 'Connection successful. Fetched 1 deal.' };
+  },
+
+  '/api/integrations/amplitude/mappings': () => {
+    return [];
+  },
+
+  '/api/integrations/amplitude/sync': () => {
+    return MOCK_SYNC_HISTORY.filter((s) => s.integration_id === 'mock-int-amplitude');
+  },
+
+  '/api/integrations/amplitude/fields': () => {
+    return { events: [], user_properties: [] };
+  },
+
+  '/api/integrations/amplitude/test': () => {
+    return { success: true, message: 'Connection successful.' };
+  },
+
+  '/api/integrations/google_ads/mappings': () => [],
+  '/api/integrations/google_ads/sync': () => [],
+  '/api/integrations/google_ads/fields': () => ({ campaigns: [], keywords: [] }),
+  '/api/integrations/google_ads/test': () => ({ success: false, message: 'Not connected.' }),
+
+  '/api/integrations/meta_ads/mappings': () => [],
+  '/api/integrations/meta_ads/sync': () => [],
+  '/api/integrations/meta_ads/fields': () => ({ campaigns: [], ad_sets: [] }),
+  '/api/integrations/meta_ads/test': () => ({ success: false, message: 'Token expired. Please reconnect.' }),
 };
 
 /**

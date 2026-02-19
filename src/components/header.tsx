@@ -8,11 +8,17 @@ const pageTitles: Record<string, string> = {
   '/forecasts': 'Revenue Forecasts',
   '/brain': 'Brain Insights',
   '/settings': 'Strategy Settings',
+  '/settings/integrations': 'Integrations',
 };
 
 export function Header() {
   const pathname = usePathname();
-  const title = pageTitles[pathname] ?? 'GTM Brain';
+
+  // Exact match first, then prefix match for dynamic routes
+  const title =
+    pageTitles[pathname] ??
+    (pathname.startsWith('/settings/integrations/') ? 'Integration Settings' : null) ??
+    'GTM Brain';
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">

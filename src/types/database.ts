@@ -138,6 +138,62 @@ export interface RevenueForecast {
   created_at: string;
 }
 
+// --- Integration Enums ---
+
+export type IntegrationProvider = 'hubspot' | 'amplitude' | 'google_ads' | 'meta_ads';
+
+export type IntegrationStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+export type IntegrationAuthType = 'oauth2' | 'api_key';
+
+export type SyncStatus = 'running' | 'success' | 'error';
+
+export type FieldMappingStatus = 'mapped' | 'suggested' | 'unmapped';
+
+// --- Integration Table Row Types ---
+
+export interface Integration {
+  id: string;
+  provider: IntegrationProvider;
+  status: IntegrationStatus;
+  auth_type: IntegrationAuthType;
+  credentials_encrypted: string | null;
+  account_name: string | null;
+  account_id: string | null;
+  scopes: string[];
+  config: Record<string, unknown>;
+  error_message: string | null;
+  connected_at: string | null;
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrationFieldMapping {
+  id: string;
+  integration_id: string;
+  source_object: string;
+  source_field: string;
+  target_table: string;
+  target_field: string;
+  status: FieldMappingStatus;
+  transform_rule: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrationSync {
+  id: string;
+  integration_id: string;
+  status: SyncStatus;
+  started_at: string;
+  completed_at: string | null;
+  records_synced: number;
+  records_failed: number;
+  error_details: string | null;
+  created_at: string;
+}
+
 // --- Supabase Database Type Map ---
 
 export interface Database {
@@ -195,6 +251,32 @@ export interface Database {
         };
         Update: Partial<Omit<RevenueForecast, 'id' | 'created_at'>>;
       };
+      integrations: {
+        Row: Integration;
+        Insert: Omit<Integration, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Omit<Integration, 'id' | 'created_at'>>;
+      };
+      integration_field_mappings: {
+        Row: IntegrationFieldMapping;
+        Insert: Omit<IntegrationFieldMapping, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Omit<IntegrationFieldMapping, 'id' | 'created_at'>>;
+      };
+      integration_syncs: {
+        Row: IntegrationSync;
+        Insert: Omit<IntegrationSync, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Omit<IntegrationSync, 'id' | 'created_at'>>;
+      };
     };
     Enums: {
       funnel_stage: FunnelStage;
@@ -206,6 +288,11 @@ export interface Database {
       user_role: UserRole;
       forecast_scenario: ForecastScenario;
       revenue_type: RevenueType;
+      integration_provider: IntegrationProvider;
+      integration_status: IntegrationStatus;
+      integration_auth_type: IntegrationAuthType;
+      sync_status: SyncStatus;
+      field_mapping_status: FieldMappingStatus;
     };
   };
 }
