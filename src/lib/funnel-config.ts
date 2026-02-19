@@ -4,7 +4,7 @@ export interface FunnelRow {
   key: string;
   label: string;
   format: MetricFormat;
-  group: 'volume' | 'conversion' | 'cost';
+  group: 'volume' | 'conversion' | 'cost' | 'customers' | 'rates' | 'growth' | 'contraction' | 'summary';
   /** How to summarise across periods: 'sum' (default) or 'avg' */
   summary?: 'sum' | 'avg';
 }
@@ -19,7 +19,6 @@ export type PeriodType = 'daily' | 'weekly' | 'monthly';
 
 const PAID_ADS_FUNNEL: FunnelConfig = {
   rows: [
-    { key: 'investment', label: '€ Investment', format: 'currency', group: 'volume' },
     { key: 'leads', label: 'Leads', format: 'number', group: 'volume' },
     { key: 'sql', label: 'SQL', format: 'number', group: 'volume' },
     { key: 'sal', label: 'SAL', format: 'number', group: 'volume' },
@@ -28,6 +27,8 @@ const PAID_ADS_FUNNEL: FunnelConfig = {
     { key: 'lead_to_sql', label: '% Lead → SQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sql_to_sal', label: '% SQL → SAL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sal_to_win', label: '% SAL → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'overall_conv', label: '% Lead → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'investment', label: '€ Investment', format: 'currency', group: 'cost' },
     { key: 'cpl', label: 'CPL', format: 'currency', group: 'cost', summary: 'avg' },
     { key: 'cpsql', label: 'CPSQL', format: 'currency', group: 'cost', summary: 'avg' },
     { key: 'cpsal', label: 'CPSAL', format: 'currency', group: 'cost', summary: 'avg' },
@@ -39,7 +40,6 @@ const PAID_ADS_FUNNEL: FunnelConfig = {
 
 const PLG_FUNNEL: FunnelConfig = {
   rows: [
-    { key: 'investment', label: '€ Investment', format: 'currency', group: 'volume' },
     { key: 'users', label: 'Users', format: 'number', group: 'volume' },
     { key: 'hand_risers', label: 'Hand-Risers', format: 'number', group: 'volume' },
     { key: 'signups', label: 'SignUps', format: 'number', group: 'volume' },
@@ -52,6 +52,8 @@ const PLG_FUNNEL: FunnelConfig = {
     { key: 'signup_to_pql', label: '% SignUp → PQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pql_to_pqa', label: '% PQL → PQA', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pqa_to_win', label: '% PQA → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'overall_conv', label: '% User → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'investment', label: '€ Investment', format: 'currency', group: 'cost' },
     { key: 'cpu', label: 'CPU', format: 'currency', group: 'cost', summary: 'avg' },
     { key: 'cphr', label: 'CPHR', format: 'currency', group: 'cost', summary: 'avg' },
     { key: 'cps', label: 'CPS', format: 'currency', group: 'cost', summary: 'avg' },
@@ -75,6 +77,7 @@ const OUTBOUND_SLG_FUNNEL: FunnelConfig = {
     { key: 'lead_to_sql', label: '% Lead → SQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sql_to_sal', label: '% SQL → SAL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sal_to_win', label: '% SAL → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'overall_conv', label: '% Prospect → Win', format: 'percent', group: 'conversion', summary: 'avg' },
   ],
 };
 
@@ -96,6 +99,7 @@ const OUTBOUND_PLG_FUNNEL: FunnelConfig = {
     { key: 'signup_to_pql', label: '% SignUp → PQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pql_to_pqa', label: '% PQL → PQA', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pqa_to_win', label: '% PQA → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'overall_conv', label: '% Outreach → Win', format: 'percent', group: 'conversion', summary: 'avg' },
   ],
 };
 
@@ -115,6 +119,7 @@ const ORGANIC_PLG_FUNNEL: FunnelConfig = {
     { key: 'signup_to_pql', label: '% SignUp → PQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pql_to_pqa', label: '% PQL → PQA', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pqa_to_win', label: '% PQA → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'overall_conv', label: '% User → Win', format: 'percent', group: 'conversion', summary: 'avg' },
   ],
 };
 
@@ -130,6 +135,7 @@ const ORGANIC_SLG_FUNNEL: FunnelConfig = {
     { key: 'lead_to_sql', label: '% Lead → SQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sql_to_sal', label: '% SQL → SAL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sal_to_win', label: '% SAL → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'overall_conv', label: '% Lead → Win', format: 'percent', group: 'conversion', summary: 'avg' },
   ],
 };
 
@@ -167,10 +173,14 @@ const ACQUISITION_FUNNELS: Record<string, FunnelConfig> = {
 
 export const RETENTION_CONFIG: FunnelConfig = {
   rows: [
-    { key: 'active_clients', label: 'Active Clients', format: 'number', group: 'volume', summary: 'avg' },
-    { key: 'churn_rate', label: '% Churn Rate', format: 'percent', group: 'volume', summary: 'avg' },
-    { key: 'nrr', label: 'NRR', format: 'percent', group: 'volume', summary: 'avg' },
-    { key: 'grr', label: 'GRR', format: 'percent', group: 'volume', summary: 'avg' },
+    { key: 'active_clients', label: 'Active Clients', format: 'number', group: 'customers', summary: 'avg' },
+    { key: 'new_clients', label: 'New Clients', format: 'number', group: 'customers' },
+    { key: 'churned_clients', label: 'Churned Clients', format: 'number', group: 'customers' },
+    { key: 'net_new_clients', label: 'Net New Clients', format: 'number', group: 'customers' },
+    { key: 'logo_churn_rate', label: '% Logo Churn Rate', format: 'percent', group: 'rates', summary: 'avg' },
+    { key: 'revenue_churn_rate', label: '% Revenue Churn Rate', format: 'percent', group: 'rates', summary: 'avg' },
+    { key: 'nrr', label: 'NRR', format: 'percent', group: 'rates', summary: 'avg' },
+    { key: 'grr', label: 'GRR', format: 'percent', group: 'rates', summary: 'avg' },
   ],
 };
 
@@ -178,13 +188,14 @@ export const RETENTION_CONFIG: FunnelConfig = {
 
 export const EXPANSION_CONFIG: FunnelConfig = {
   rows: [
-    { key: 'upsell_mrr', label: 'Upsell MRR', format: 'currency', group: 'volume' },
-    { key: 'crosssell_mrr', label: 'CrossSell MRR', format: 'currency', group: 'volume' },
-    { key: 'expansion_mrr', label: 'Expansion MRR', format: 'currency', group: 'volume' },
-    { key: 'downsell_mrr', label: 'Downsell MRR', format: 'currency', group: 'volume' },
-    { key: 'crosssell_churn_mrr', label: 'CrossSell Churn MRR', format: 'currency', group: 'volume' },
-    { key: 'contraction_mrr', label: 'Contraction MRR', format: 'currency', group: 'volume' },
-    { key: 'net_expansion_mrr', label: 'Net Expansion MRR', format: 'currency', group: 'volume' },
+    { key: 'upsell_mrr', label: 'Upsell MRR', format: 'currency', group: 'growth' },
+    { key: 'crosssell_mrr', label: 'CrossSell MRR', format: 'currency', group: 'growth' },
+    { key: 'expansion_mrr', label: 'Expansion MRR', format: 'currency', group: 'growth' },
+    { key: 'downsell_mrr', label: 'Downsell MRR', format: 'currency', group: 'contraction' },
+    { key: 'crosssell_churn_mrr', label: 'CrossSell Churn MRR', format: 'currency', group: 'contraction' },
+    { key: 'contraction_mrr', label: 'Contraction MRR', format: 'currency', group: 'contraction' },
+    { key: 'net_expansion_mrr', label: 'Net Expansion MRR', format: 'currency', group: 'summary' },
+    { key: 'expansion_rate', label: 'Expansion Rate', format: 'percent', group: 'summary', summary: 'avg' },
   ],
 };
 

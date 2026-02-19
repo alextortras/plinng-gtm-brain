@@ -14,6 +14,11 @@ const GROUP_LABELS: Record<string, string> = {
   volume: 'Volume',
   conversion: 'Conversions',
   cost: 'Unit Economics',
+  customers: 'Customers',
+  rates: 'Rates',
+  growth: 'Growth',
+  contraction: 'Contraction',
+  summary: 'Summary',
 };
 
 function formatValue(value: number, format: 'number' | 'currency' | 'percent'): string {

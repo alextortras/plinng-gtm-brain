@@ -633,8 +633,17 @@ export function generatePhaseTableData(
   // --- Retention ---
   if (phase === 'retention') {
     for (const col of columns) {
-      values['active_clients'][col] = Math.round(rngRange(rng, 180, 260));
-      values['churn_rate'][col] = rngRange(rng, 0.02, 0.05);
+      const active = Math.round(rngRange(rng, 180, 260));
+      const newClients = Math.round(rngRange(rng, 10, 35));
+      const churned = Math.round(rngRange(rng, 3, 15));
+      const netNew = newClients - churned;
+
+      values['active_clients'][col] = active;
+      values['new_clients'][col] = newClients;
+      values['churned_clients'][col] = churned;
+      values['net_new_clients'][col] = netNew;
+      values['logo_churn_rate'][col] = active > 0 ? churned / active : 0;
+      values['revenue_churn_rate'][col] = rngRange(rng, 0.02, 0.06);
       values['nrr'][col] = rngRange(rng, 0.95, 1.15);
       values['grr'][col] = rngRange(rng, 0.88, 0.98);
     }
@@ -658,6 +667,9 @@ export function generatePhaseTableData(
       values['crosssell_churn_mrr'][col] = crosssellChurn;
       values['contraction_mrr'][col] = contraction;
       values['net_expansion_mrr'][col] = expansion - contraction;
+      // Expansion rate: net expansion / base MRR (assume ~25k base MRR)
+      const baseMrr = rngRange(rng, 20000, 30000);
+      values['expansion_rate'][col] = baseMrr > 0 ? (expansion - contraction) / baseMrr : 0;
     }
     return { columns, values };
   }
@@ -685,8 +697,9 @@ export function generatePhaseTableData(
   // --- Acquisition: Specific motion ---
   const volumeRows = config.rows.filter((r) => r.group === 'volume' && r.format === 'number');
   const investmentRow = config.rows.find((r) => r.key === 'investment');
-  const conversionRows = config.rows.filter((r) => r.group === 'conversion');
-  const costRows = config.rows.filter((r) => r.group === 'cost');
+  const conversionRows = config.rows.filter((r) => r.group === 'conversion' && r.key !== 'overall_conv');
+  const overallConvRow = config.rows.find((r) => r.key === 'overall_conv');
+  const costRows = config.rows.filter((r) => r.group === 'cost' && r.key !== 'investment');
 
   for (const col of columns) {
     // Investment (if present)
@@ -713,12 +726,18 @@ export function generatePhaseTableData(
     const arpu = rngRange(rng, 80, 130);
     values['mrr'][col] = Math.round(wins * arpu);
 
-    // Conversions — derived from consecutive volume rows
+    // Stage-to-stage conversions — derived from consecutive volume rows
     for (let i = 0; i < conversionRows.length && i < volValues.length - 1; i++) {
       values[conversionRows[i].key][col] = volValues[i] > 0 ? volValues[i + 1] / volValues[i] : 0;
     }
 
-    // Costs — investment / each volume stage
+    // Overall conversion (first stage → win)
+    if (overallConvRow) {
+      const firstStage = volValues[0] ?? 0;
+      values[overallConvRow.key][col] = firstStage > 0 ? wins / firstStage : 0;
+    }
+
+    // Costs — investment / each volume stage (excluding investment row itself)
     if (investment > 0) {
       for (let i = 0; i < costRows.length && i < volValues.length; i++) {
         values[costRows[i].key][col] = volValues[i] > 0 ? investment / volValues[i] : 0;
@@ -835,5 +854,122 @@ export function generateAcquisitionKpis(
     paybackChange,
     salesCycleDays,
     salesCycleChange,
+  };
+}
+
+// --- Retention KPIs (monthly, with MoM comparison) ---
+
+export interface RetentionKpis {
+  activeClients: number;
+  activeClientsChange: number;
+  churnRate: number;
+  churnRateChange: number;
+  nrr: number;
+  nrrChange: number;
+  grr: number;
+  grrChange: number;
+}
+
+export function generateRetentionKpis(
+  config: FunnelConfig,
+  from?: string,
+  to?: string,
+): RetentionKpis {
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+
+  const hasDateFilter = !!from || !!to;
+  const periodFrom = hasDateFilter ? (from || lastMonthStart) : thisMonthStart;
+  const periodTo = hasDateFilter ? (to || now.toISOString().slice(0, 10)) : now.toISOString().slice(0, 10);
+
+  const thisData = generatePhaseTableData(config, 'monthly', 'retention', periodFrom, periodTo, 42);
+  const lastData = generatePhaseTableData(config, 'monthly', 'retention', lastMonthStart, lastMonthEnd, 99);
+
+  const avgKey = (data: PhaseTableData, key: string) => {
+    const vals = data.columns.map((col) => data.values[key]?.[col] ?? 0).filter((v) => v !== 0);
+    return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+  };
+
+  const activeClients = avgKey(thisData, 'active_clients');
+  const lastActiveClients = avgKey(lastData, 'active_clients');
+  const activeClientsChange = lastActiveClients > 0 ? (activeClients - lastActiveClients) / lastActiveClients : 0;
+
+  const churnRate = avgKey(thisData, 'logo_churn_rate');
+  const lastChurnRate = avgKey(lastData, 'logo_churn_rate');
+  const churnRateChange = lastChurnRate > 0 ? (churnRate - lastChurnRate) / lastChurnRate : 0;
+
+  const nrr = avgKey(thisData, 'nrr');
+  const lastNrr = avgKey(lastData, 'nrr');
+  const nrrChange = lastNrr > 0 ? (nrr - lastNrr) / lastNrr : 0;
+
+  const grr = avgKey(thisData, 'grr');
+  const lastGrr = avgKey(lastData, 'grr');
+  const grrChange = lastGrr > 0 ? (grr - lastGrr) / lastGrr : 0;
+
+  return { activeClients, activeClientsChange, churnRate, churnRateChange, nrr, nrrChange, grr, grrChange };
+}
+
+// --- Expansion KPIs (monthly, with MoM comparison) ---
+
+export interface ExpansionKpis {
+  netExpansionMrr: number;
+  netExpansionMrrChange: number;
+  expansionMrr: number;
+  expansionMrrChange: number;
+  contractionMrr: number;
+  contractionMrrChange: number;
+  expansionRate: number;
+  expansionRateChange: number;
+}
+
+export function generateExpansionKpis(
+  config: FunnelConfig,
+  from?: string,
+  to?: string,
+): ExpansionKpis {
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+
+  const hasDateFilter = !!from || !!to;
+  const periodFrom = hasDateFilter ? (from || lastMonthStart) : thisMonthStart;
+  const periodTo = hasDateFilter ? (to || now.toISOString().slice(0, 10)) : now.toISOString().slice(0, 10);
+
+  const thisData = generatePhaseTableData(config, 'monthly', 'expansion', periodFrom, periodTo, 42);
+  const lastData = generatePhaseTableData(config, 'monthly', 'expansion', lastMonthStart, lastMonthEnd, 99);
+
+  const sumKey = (data: PhaseTableData, key: string) => {
+    return data.columns.reduce((s, col) => s + (data.values[key]?.[col] ?? 0), 0);
+  };
+
+  const avgKey = (data: PhaseTableData, key: string) => {
+    const vals = data.columns.map((col) => data.values[key]?.[col] ?? 0).filter((v) => v !== 0);
+    return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+  };
+
+  const pctChange = (curr: number, prev: number) => prev > 0 ? (curr - prev) / prev : 0;
+
+  const netExpansionMrr = sumKey(thisData, 'net_expansion_mrr');
+  const expansionMrr = sumKey(thisData, 'expansion_mrr');
+  const contractionMrr = sumKey(thisData, 'contraction_mrr');
+  const expansionRate = avgKey(thisData, 'expansion_rate');
+
+  const lastNetExpansionMrr = sumKey(lastData, 'net_expansion_mrr');
+  const lastExpansionMrr = sumKey(lastData, 'expansion_mrr');
+  const lastContractionMrr = sumKey(lastData, 'contraction_mrr');
+  const lastExpansionRate = avgKey(lastData, 'expansion_rate');
+
+  return {
+    netExpansionMrr,
+    netExpansionMrrChange: pctChange(netExpansionMrr, lastNetExpansionMrr),
+    expansionMrr,
+    expansionMrrChange: pctChange(expansionMrr, lastExpansionMrr),
+    contractionMrr,
+    contractionMrrChange: pctChange(contractionMrr, lastContractionMrr),
+    expansionRate,
+    expansionRateChange: pctChange(expansionRate, lastExpansionRate),
   };
 }

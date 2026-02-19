@@ -1,23 +1,25 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useApi } from '@/hooks/use-api';
 import { KpiCard } from '@/components/kpi-card';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
 import { PhaseMetricsTable } from '@/components/phase-metrics-table';
 import { PhaseMetricsChart } from '@/components/phase-metrics-chart';
-import { DailyFunnelMetric } from '@/types/database';
 import {
   CHANNEL_OPTIONS,
   MOTION_TYPE_OPTIONS,
-  CHANNEL_API_MAP,
   isPaidChannel,
   getPhaseFunnel,
   type PeriodType,
 } from '@/lib/funnel-config';
-import { generatePhaseTableData, generateAcquisitionKpis } from '@/lib/mock-data';
+import {
+  generatePhaseTableData,
+  generateAcquisitionKpis,
+  generateRetentionKpis,
+  generateExpansionKpis,
+} from '@/lib/mock-data';
 
 const PHASE_TABS = [
   { value: 'acquisition', label: 'Acquisition' },
@@ -29,12 +31,6 @@ const VIEW_TABS = [
   { value: 'table', label: 'Table' },
   { value: 'graph', label: 'Graph' },
 ];
-
-const PHASE_STAGES: Record<string, readonly string[]> = {
-  acquisition: ['awareness', 'education', 'selection', 'commit'],
-  retention: ['onboarding', 'impact'],
-  expansion: ['growth', 'advocacy'],
-};
 
 const MARKET_OPTIONS = [
   { value: '', label: 'All Markets' },
@@ -93,42 +89,6 @@ export default function DashboardPage() {
   const [tablePeriod, setTablePeriod] = useState<PeriodType>('weekly');
   const [chartPeriod, setChartPeriod] = useState<PeriodType>('weekly');
 
-  const params = useMemo(() => {
-    const p: Record<string, string> = {};
-    if (market) p.market = market;
-    if (channel) {
-      p.motion = CHANNEL_API_MAP[channel] || channel;
-    }
-    if (from) p.from = from;
-    if (to) p.to = to;
-    return p;
-  }, [market, channel, from, to]);
-
-  const { data: metrics, loading } = useApi<DailyFunnelMetric[]>(
-    '/api/funnel-metrics',
-    params
-  );
-
-  const phaseMetrics = useMemo(() => {
-    if (!metrics) return [];
-    const stages = PHASE_STAGES[phase] ?? [];
-    return metrics.filter((m) => stages.includes(m.funnel_stage));
-  }, [metrics, phase]);
-
-  const kpis = useMemo(() => {
-    if (phaseMetrics.length === 0) {
-      return { totalRevenue: 0, totalPipeline: 0, blendedCac: 0, totalLeads: 0 };
-    }
-
-    const totalRevenue = phaseMetrics.reduce((s, m) => s + Number(m.revenue), 0);
-    const totalPipeline = phaseMetrics.reduce((s, m) => s + Number(m.pipeline_value), 0);
-    const totalSpend = phaseMetrics.reduce((s, m) => s + Number(m.spend), 0);
-    const totalLeads = phaseMetrics.reduce((s, m) => s + m.leads_count, 0);
-    const blendedCac = totalLeads > 0 ? totalSpend / totalLeads : 0;
-
-    return { totalRevenue, totalPipeline, blendedCac, totalLeads };
-  }, [phaseMetrics]);
-
   const paid = isPaidChannel(channel);
 
   const funnelConfig = useMemo(
@@ -141,6 +101,20 @@ export default function DashboardPage() {
       ? generateAcquisitionKpis(funnelConfig, phase, paid, from || undefined, to || undefined)
       : null,
     [funnelConfig, phase, paid, from, to]
+  );
+
+  const retKpis = useMemo(
+    () => phase === 'retention'
+      ? generateRetentionKpis(funnelConfig, from || undefined, to || undefined)
+      : null,
+    [funnelConfig, phase, from, to]
+  );
+
+  const expKpis = useMemo(
+    () => phase === 'expansion'
+      ? generateExpansionKpis(funnelConfig, from || undefined, to || undefined)
+      : null,
+    [funnelConfig, phase, from, to]
   );
 
   const tableData = useMemo(
@@ -194,18 +168,7 @@ export default function DashboardPage() {
       {/* Phase Tabs */}
       <Tabs tabs={PHASE_TABS} defaultValue="acquisition" onValueChange={setPhase}>
         {/* KPI Cards */}
-        {loading ? (
-          <div className="grid grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-4 w-24 rounded bg-muted" />
-                  <div className="mt-3 h-8 w-32 rounded bg-muted" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : phase === 'acquisition' && acqKpis ? (() => {
+        {phase === 'acquisition' && acqKpis ? (() => {
           const arrChange = formatChange(acqKpis.newArrChange);
           const arpuChange = formatChange(acqKpis.arpuChange);
           const cacChange = acqKpis.isPaid
@@ -265,30 +228,81 @@ export default function DashboardPage() {
               )}
             </div>
           );
-        })() : (
-          <div className="grid grid-cols-4 gap-4">
-            <KpiCard
-              title="Total Revenue"
-              value={formatCurrency(kpis.totalRevenue)}
-              subtitle="90-day total"
-            />
-            <KpiCard
-              title="Total Pipeline"
-              value={formatCurrency(kpis.totalPipeline)}
-              subtitle="Active pipeline"
-            />
-            <KpiCard
-              title="Blended CAC"
-              value={formatCurrency(kpis.blendedCac)}
-              subtitle="Per lead"
-            />
-            <KpiCard
-              title="Total Leads"
-              value={formatNumber(kpis.totalLeads)}
-              subtitle="Across all stages"
-            />
-          </div>
-        )}
+        })() : phase === 'retention' && retKpis ? (() => {
+          const acChange = formatChange(retKpis.activeClientsChange);
+          const churnChange = formatChangeInverted(retKpis.churnRateChange);
+          const nrrChange = formatChange(retKpis.nrrChange);
+          const grrChange = formatChange(retKpis.grrChange);
+          return (
+            <div className="grid grid-cols-4 gap-4">
+              <KpiCard
+                title="Active Clients"
+                value={formatNumber(retKpis.activeClients)}
+                subtitle={!from && !to ? 'This month' : 'Filtered period'}
+                trend={acChange.trend}
+                trendValue={acChange.text + ' vs last month'}
+              />
+              <KpiCard
+                title="Churn Rate"
+                value={formatPercent(retKpis.churnRate)}
+                subtitle="Monthly"
+                trend={churnChange.trend}
+                trendValue={churnChange.text + ' vs last month'}
+              />
+              <KpiCard
+                title="NRR"
+                value={formatPercent(retKpis.nrr)}
+                subtitle="Net Revenue Retention"
+                trend={nrrChange.trend}
+                trendValue={nrrChange.text + ' vs last month'}
+              />
+              <KpiCard
+                title="GRR"
+                value={formatPercent(retKpis.grr)}
+                subtitle="Gross Revenue Retention"
+                trend={grrChange.trend}
+                trendValue={grrChange.text + ' vs last month'}
+              />
+            </div>
+          );
+        })() : phase === 'expansion' && expKpis ? (() => {
+          const neChange = formatChange(expKpis.netExpansionMrrChange);
+          const exChange = formatChange(expKpis.expansionMrrChange);
+          const coChange = formatChangeInverted(expKpis.contractionMrrChange);
+          const erChange = formatChange(expKpis.expansionRateChange);
+          return (
+            <div className="grid grid-cols-4 gap-4">
+              <KpiCard
+                title="Net Expansion MRR"
+                value={formatCurrency(expKpis.netExpansionMrr)}
+                subtitle={!from && !to ? 'This month' : 'Filtered period'}
+                trend={neChange.trend}
+                trendValue={neChange.text + ' vs last month'}
+              />
+              <KpiCard
+                title="Expansion MRR"
+                value={formatCurrency(expKpis.expansionMrr)}
+                subtitle="Upsell + CrossSell"
+                trend={exChange.trend}
+                trendValue={exChange.text + ' vs last month'}
+              />
+              <KpiCard
+                title="Contraction MRR"
+                value={formatCurrency(expKpis.contractionMrr)}
+                subtitle="Downsell + CrossSell Churn"
+                trend={coChange.trend}
+                trendValue={coChange.text + ' vs last month'}
+              />
+              <KpiCard
+                title="Expansion Rate"
+                value={formatPercent(expKpis.expansionRate)}
+                subtitle="Net Expansion / Base MRR"
+                trend={erChange.trend}
+                trendValue={erChange.text + ' vs last month'}
+              />
+            </div>
+          );
+        })() : null}
 
         {/* Table / Graph sub-tabs */}
         <Card className="mt-4">
