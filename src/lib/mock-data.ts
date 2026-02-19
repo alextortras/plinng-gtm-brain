@@ -669,8 +669,12 @@ export function generatePhaseTableData(
       const wins = Math.round(firstStage * rngRange(rng, 0.08, 0.18));
       const investment = Math.round(rngRange(rng, 5000, 15000) * pMul);
 
+      const arpu = rngRange(rng, 80, 130);
+      const mrr = Math.round(wins * arpu);
+
       values['first_stage_entries'][col] = firstStage;
       values['win'][col] = wins;
+      values['mrr'][col] = mrr;
       values['first_to_win'][col] = firstStage > 0 ? wins / firstStage : 0;
       values['total_investment'][col] = investment;
       values['blended_cac'][col] = wins > 0 ? investment / wins : 0;
@@ -704,6 +708,11 @@ export function generatePhaseTableData(
       }
     }
 
+    // MRR — wins * ARPU (80-130 EUR per business rules)
+    const wins = volValues[volValues.length - 1] ?? 0;
+    const arpu = rngRange(rng, 80, 130);
+    values['mrr'][col] = Math.round(wins * arpu);
+
     // Conversions — derived from consecutive volume rows
     for (let i = 0; i < conversionRows.length && i < volValues.length - 1; i++) {
       values[conversionRows[i].key][col] = volValues[i] > 0 ? volValues[i + 1] / volValues[i] : 0;
@@ -718,4 +727,113 @@ export function generatePhaseTableData(
   }
 
   return { columns, values };
+}
+
+// --- Acquisition KPIs (monthly, with MoM comparison) ---
+
+export interface AcquisitionKpis {
+  newArr: number;
+  newArrChange: number;
+  arpu: number;
+  arpuChange: number;
+  cacOrConversion: number;
+  cacOrConversionChange: number;
+  isPaid: boolean;
+  /** Paid channels: CAC payback in months */
+  paybackMonths: number;
+  paybackChange: number;
+  /** Non-paid channels: avg days from first stage to win */
+  salesCycleDays: number;
+  salesCycleChange: number;
+}
+
+export function generateAcquisitionKpis(
+  config: FunnelConfig,
+  phase: string,
+  isPaid: boolean,
+  from?: string,
+  to?: string,
+): AcquisitionKpis {
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+
+  const hasDateFilter = !!from || !!to;
+  const periodFrom = hasDateFilter ? (from || lastMonthStart) : thisMonthStart;
+  const periodTo = hasDateFilter ? (to || now.toISOString().slice(0, 10)) : now.toISOString().slice(0, 10);
+
+  const thisData = generatePhaseTableData(config, 'monthly', phase, periodFrom, periodTo, 42);
+  const lastData = generatePhaseTableData(config, 'monthly', phase, lastMonthStart, lastMonthEnd, 99);
+
+  const sumKey = (data: PhaseTableData, key: string) => {
+    return data.columns.reduce((s, col) => s + (data.values[key]?.[col] ?? 0), 0);
+  };
+
+  const isBlended = config.rows.some((r) => r.key === 'first_stage_entries');
+  const firstStageKey = isBlended ? 'first_stage_entries' : (config.rows.find((r) => r.group === 'volume' && r.format === 'number')?.key ?? 'leads');
+  const investmentKey = isBlended ? 'total_investment' : 'investment';
+
+  // This period
+  const thisMrr = sumKey(thisData, 'mrr');
+  const thisWins = sumKey(thisData, 'win');
+  const thisFirstStage = sumKey(thisData, firstStageKey);
+  const thisInvestment = sumKey(thisData, investmentKey);
+
+  // Last month
+  const lastMrr = sumKey(lastData, 'mrr');
+  const lastWins = sumKey(lastData, 'win');
+  const lastFirstStage = sumKey(lastData, firstStageKey);
+  const lastInvestment = sumKey(lastData, investmentKey);
+
+  // New ARR
+  const newArr = thisMrr * 12;
+  const lastArr = lastMrr * 12;
+  const newArrChange = lastArr > 0 ? (newArr - lastArr) / lastArr : 0;
+
+  // ARPU
+  const arpu = thisWins > 0 ? thisMrr / thisWins : 0;
+  const lastArpu = lastWins > 0 ? lastMrr / lastWins : 0;
+  const arpuChange = lastArpu > 0 ? (arpu - lastArpu) / lastArpu : 0;
+
+  // CAC or Conversion Rate
+  let cacOrConversion: number;
+  let cacOrConversionChange: number;
+
+  if (isPaid) {
+    cacOrConversion = thisWins > 0 ? thisInvestment / thisWins : 0;
+    const lastCac = lastWins > 0 ? lastInvestment / lastWins : 0;
+    cacOrConversionChange = lastCac > 0 ? (cacOrConversion - lastCac) / lastCac : 0;
+  } else {
+    cacOrConversion = thisFirstStage > 0 ? thisWins / thisFirstStage : 0;
+    const lastConv = lastFirstStage > 0 ? lastWins / lastFirstStage : 0;
+    cacOrConversionChange = lastConv > 0 ? (cacOrConversion - lastConv) / lastConv : 0;
+  }
+
+  // Payback (paid channels)
+  const paybackMonths = arpu > 0 && isPaid ? cacOrConversion / arpu : 0;
+  const lastPayback = lastArpu > 0 && isPaid ? (lastWins > 0 ? lastInvestment / lastWins : 0) / lastArpu : 0;
+  const paybackChange = lastPayback > 0 ? (paybackMonths - lastPayback) / lastPayback : 0;
+
+  // Sales Cycle (non-paid channels) — deterministic mock based on funnel depth
+  const volumeStages = config.rows.filter((r) => r.group === 'volume' && r.format === 'number').length;
+  const cycleRng = createRng(77);
+  const baseDays = 12 + volumeStages * 5; // more stages → longer cycle
+  const salesCycleDays = baseDays + rngRange(cycleRng, -3, 8);
+  const lastCycleDays = baseDays + rngRange(cycleRng, -3, 8);
+  const salesCycleChange = lastCycleDays > 0 ? (salesCycleDays - lastCycleDays) / lastCycleDays : 0;
+
+  return {
+    newArr,
+    newArrChange,
+    arpu,
+    arpuChange,
+    cacOrConversion,
+    cacOrConversionChange,
+    isPaid,
+    paybackMonths,
+    paybackChange,
+    salesCycleDays,
+    salesCycleChange,
+  };
 }

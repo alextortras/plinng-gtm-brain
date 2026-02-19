@@ -24,6 +24,7 @@ const PAID_ADS_FUNNEL: FunnelConfig = {
     { key: 'sql', label: 'SQL', format: 'number', group: 'volume' },
     { key: 'sal', label: 'SAL', format: 'number', group: 'volume' },
     { key: 'win', label: 'Win', format: 'number', group: 'volume' },
+    { key: 'mrr', label: 'MRR', format: 'currency', group: 'volume' },
     { key: 'lead_to_sql', label: '% Lead → SQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sql_to_sal', label: '% SQL → SAL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sal_to_win', label: '% SAL → Win', format: 'percent', group: 'conversion', summary: 'avg' },
@@ -45,6 +46,7 @@ const PLG_FUNNEL: FunnelConfig = {
     { key: 'pql', label: 'PQL', format: 'number', group: 'volume' },
     { key: 'pqa', label: 'PQA', format: 'number', group: 'volume' },
     { key: 'win', label: 'Win', format: 'number', group: 'volume' },
+    { key: 'mrr', label: 'MRR', format: 'currency', group: 'volume' },
     { key: 'user_to_hr', label: '% User → HR', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'hr_to_signup', label: '% HR → SignUp', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'signup_to_pql', label: '% SignUp → PQL', format: 'percent', group: 'conversion', summary: 'avg' },
@@ -68,6 +70,7 @@ const OUTBOUND_SLG_FUNNEL: FunnelConfig = {
     { key: 'sql', label: 'SQL', format: 'number', group: 'volume' },
     { key: 'sal', label: 'SAL', format: 'number', group: 'volume' },
     { key: 'win', label: 'Win', format: 'number', group: 'volume' },
+    { key: 'mrr', label: 'MRR', format: 'currency', group: 'volume' },
     { key: 'prospect_to_lead', label: '% Prospect → Lead', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'lead_to_sql', label: '% Lead → SQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'sql_to_sal', label: '% SQL → SAL', format: 'percent', group: 'conversion', summary: 'avg' },
@@ -86,6 +89,7 @@ const OUTBOUND_PLG_FUNNEL: FunnelConfig = {
     { key: 'pql', label: 'PQL', format: 'number', group: 'volume' },
     { key: 'pqa', label: 'PQA', format: 'number', group: 'volume' },
     { key: 'win', label: 'Win', format: 'number', group: 'volume' },
+    { key: 'mrr', label: 'MRR', format: 'currency', group: 'volume' },
     { key: 'outreach_to_user', label: '% Outreach → User', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'user_to_hr', label: '% User → HR', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'hr_to_signup', label: '% HR → SignUp', format: 'percent', group: 'conversion', summary: 'avg' },
@@ -95,9 +99,9 @@ const OUTBOUND_PLG_FUNNEL: FunnelConfig = {
   ],
 };
 
-// ---- Acquisition: Organic (PLG-like, no € Investment) ----
+// ---- Acquisition: Organic PLG (PLG-like, no € Investment) ----
 
-const ORGANIC_FUNNEL: FunnelConfig = {
+const ORGANIC_PLG_FUNNEL: FunnelConfig = {
   rows: [
     { key: 'users', label: 'Users', format: 'number', group: 'volume' },
     { key: 'hand_risers', label: 'Hand-Risers', format: 'number', group: 'volume' },
@@ -105,11 +109,27 @@ const ORGANIC_FUNNEL: FunnelConfig = {
     { key: 'pql', label: 'PQL', format: 'number', group: 'volume' },
     { key: 'pqa', label: 'PQA', format: 'number', group: 'volume' },
     { key: 'win', label: 'Win', format: 'number', group: 'volume' },
+    { key: 'mrr', label: 'MRR', format: 'currency', group: 'volume' },
     { key: 'user_to_hr', label: '% User → HR', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'hr_to_signup', label: '% HR → SignUp', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'signup_to_pql', label: '% SignUp → PQL', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pql_to_pqa', label: '% PQL → PQA', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'pqa_to_win', label: '% PQA → Win', format: 'percent', group: 'conversion', summary: 'avg' },
+  ],
+};
+
+// ---- Acquisition: Organic SLG (SLG-like, no € Investment) ----
+
+const ORGANIC_SLG_FUNNEL: FunnelConfig = {
+  rows: [
+    { key: 'leads', label: 'Leads', format: 'number', group: 'volume' },
+    { key: 'sql', label: 'SQL', format: 'number', group: 'volume' },
+    { key: 'sal', label: 'SAL', format: 'number', group: 'volume' },
+    { key: 'win', label: 'Win', format: 'number', group: 'volume' },
+    { key: 'mrr', label: 'MRR', format: 'currency', group: 'volume' },
+    { key: 'lead_to_sql', label: '% Lead → SQL', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'sql_to_sal', label: '% SQL → SAL', format: 'percent', group: 'conversion', summary: 'avg' },
+    { key: 'sal_to_win', label: '% SAL → Win', format: 'percent', group: 'conversion', summary: 'avg' },
   ],
 };
 
@@ -123,6 +143,7 @@ const ALL_MOTIONS_ACQUISITION: FunnelConfig = {
   rows: [
     { key: 'first_stage_entries', label: 'Users', format: 'number', group: 'volume' },
     { key: 'win', label: 'Wins', format: 'number', group: 'volume' },
+    { key: 'mrr', label: 'MRR', format: 'currency', group: 'volume' },
     { key: 'first_to_win', label: '% Users → Win', format: 'percent', group: 'conversion', summary: 'avg' },
     { key: 'total_investment', label: 'Total Investment', format: 'currency', group: 'cost' },
     { key: 'blended_cac', label: 'Blended CAC', format: 'currency', group: 'cost', summary: 'avg' },
@@ -131,15 +152,15 @@ const ALL_MOTIONS_ACQUISITION: FunnelConfig = {
 
 // ---- Lookup maps ----
 
-export const ACQUISITION_FUNNELS: Record<string, FunnelConfig> = {
-  '': ALL_MOTIONS_ACQUISITION,
-  paid_ads: PAID_ADS_FUNNEL,
-  plg: PLG_FUNNEL,
-  outbound_slg: OUTBOUND_SLG_FUNNEL,
-  outbound_plg: OUTBOUND_PLG_FUNNEL,
-  organic: ORGANIC_FUNNEL,
-  partners_slg: PARTNERS_SLG_FUNNEL,
-  partners_plg: PARTNERS_PLG_FUNNEL,
+const ACQUISITION_FUNNELS: Record<string, FunnelConfig> = {
+  'paid_ads:slg': PAID_ADS_FUNNEL,
+  'paid_ads:plg': PLG_FUNNEL,
+  'outbound:slg': OUTBOUND_SLG_FUNNEL,
+  'outbound:plg': OUTBOUND_PLG_FUNNEL,
+  'organic:slg': ORGANIC_SLG_FUNNEL,
+  'organic:plg': ORGANIC_PLG_FUNNEL,
+  'partners:slg': PARTNERS_SLG_FUNNEL,
+  'partners:plg': PARTNERS_PLG_FUNNEL,
 };
 
 // ---- Retention ----
@@ -167,33 +188,40 @@ export const EXPANSION_CONFIG: FunnelConfig = {
   ],
 };
 
-// ---- Motion options (updated with SLG/PLG variants) ----
+// ---- Filter options ----
 
-export const MOTION_OPTIONS = [
-  { value: '', label: 'All Motions' },
+export const CHANNEL_OPTIONS = [
+  { value: '', label: 'All Channels' },
   { value: 'paid_ads', label: 'Paid Ads' },
-  { value: 'plg', label: 'PLG' },
-  { value: 'outbound_slg', label: 'Outbound SLG' },
-  { value: 'outbound_plg', label: 'Outbound PLG' },
+  { value: 'outbound', label: 'Outbound' },
+  { value: 'partners', label: 'Partners' },
   { value: 'organic', label: 'Organic' },
-  { value: 'partners_slg', label: 'Partners SLG' },
-  { value: 'partners_plg', label: 'Partners PLG' },
 ];
 
-/** Map UI motion values to API-compatible values for data filtering */
-export const MOTION_API_MAP: Record<string, string> = {
+export const MOTION_TYPE_OPTIONS = [
+  { value: '', label: 'All Motions' },
+  { value: 'slg', label: 'SLG' },
+  { value: 'plg', label: 'PLG' },
+];
+
+/** Whether a channel has paid investment (determines CAC vs Conversion Rate in KPIs) */
+export function isPaidChannel(channel: string): boolean {
+  return channel === '' || channel === 'paid_ads';
+}
+
+/** Map channel value to API-compatible motion param for data filtering */
+export const CHANNEL_API_MAP: Record<string, string> = {
   paid_ads: 'paid_ads',
-  plg: 'plg',
-  outbound_slg: 'outbound',
-  outbound_plg: 'outbound',
+  outbound: 'outbound',
   organic: 'organic',
-  partners_slg: 'partners',
-  partners_plg: 'partners',
+  partners: 'partners',
 };
 
-/** Get the funnel config for a phase + motion combination */
-export function getPhaseFunnel(phase: string, motion: string): FunnelConfig {
+/** Get the funnel config for a phase + channel + motion type combination */
+export function getPhaseFunnel(phase: string, channel: string, motionType: string): FunnelConfig {
   if (phase === 'retention') return RETENTION_CONFIG;
   if (phase === 'expansion') return EXPANSION_CONFIG;
-  return ACQUISITION_FUNNELS[motion] ?? ALL_MOTIONS_ACQUISITION;
+  if (!channel || !motionType) return ALL_MOTIONS_ACQUISITION;
+  const key = `${channel}:${motionType}`;
+  return ACQUISITION_FUNNELS[key] ?? ALL_MOTIONS_ACQUISITION;
 }

@@ -10,12 +10,14 @@ import { PhaseMetricsTable } from '@/components/phase-metrics-table';
 import { PhaseMetricsChart } from '@/components/phase-metrics-chart';
 import { DailyFunnelMetric } from '@/types/database';
 import {
-  MOTION_OPTIONS,
-  MOTION_API_MAP,
+  CHANNEL_OPTIONS,
+  MOTION_TYPE_OPTIONS,
+  CHANNEL_API_MAP,
+  isPaidChannel,
   getPhaseFunnel,
   type PeriodType,
 } from '@/lib/funnel-config';
-import { generatePhaseTableData } from '@/lib/mock-data';
+import { generatePhaseTableData, generateAcquisitionKpis } from '@/lib/mock-data';
 
 const PHASE_TABS = [
   { value: 'acquisition', label: 'Acquisition' },
@@ -53,9 +55,37 @@ function formatNumber(val: number): string {
   return new Intl.NumberFormat('en-US').format(Math.round(val));
 }
 
+function formatPercent(val: number): string {
+  return (val * 100).toFixed(1) + '%';
+}
+
+function formatChange(val: number): { text: string; trend: 'up' | 'down' | 'neutral' } {
+  const pct = (val * 100).toFixed(1) + '%';
+  if (val > 0.005) return { text: '+' + pct, trend: 'up' };
+  if (val < -0.005) return { text: pct, trend: 'down' };
+  return { text: pct, trend: 'neutral' };
+}
+
+/** For CAC / Payback, lower is better — invert trend direction */
+function formatChangeInverted(val: number): { text: string; trend: 'up' | 'down' | 'neutral' } {
+  const pct = (val * 100).toFixed(1) + '%';
+  if (val > 0.005) return { text: '+' + pct, trend: 'down' };
+  if (val < -0.005) return { text: pct, trend: 'up' };
+  return { text: pct, trend: 'neutral' };
+}
+
+function formatMonths(val: number): string {
+  return val.toFixed(1) + ' mo';
+}
+
+function formatDays(val: number): string {
+  return Math.round(val) + ' days';
+}
+
 export default function DashboardPage() {
   const [market, setMarket] = useState('');
-  const [motion, setMotion] = useState('');
+  const [channel, setChannel] = useState('');
+  const [motionType, setMotionType] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [phase, setPhase] = useState('acquisition');
@@ -66,13 +96,13 @@ export default function DashboardPage() {
   const params = useMemo(() => {
     const p: Record<string, string> = {};
     if (market) p.market = market;
-    if (motion) {
-      p.motion = MOTION_API_MAP[motion] || motion;
+    if (channel) {
+      p.motion = CHANNEL_API_MAP[channel] || channel;
     }
     if (from) p.from = from;
     if (to) p.to = to;
     return p;
-  }, [market, motion, from, to]);
+  }, [market, channel, from, to]);
 
   const { data: metrics, loading } = useApi<DailyFunnelMetric[]>(
     '/api/funnel-metrics',
@@ -99,9 +129,18 @@ export default function DashboardPage() {
     return { totalRevenue, totalPipeline, blendedCac, totalLeads };
   }, [phaseMetrics]);
 
+  const paid = isPaidChannel(channel);
+
   const funnelConfig = useMemo(
-    () => getPhaseFunnel(phase, motion),
-    [phase, motion]
+    () => getPhaseFunnel(phase, channel, motionType),
+    [phase, channel, motionType]
+  );
+
+  const acqKpis = useMemo(
+    () => phase === 'acquisition'
+      ? generateAcquisitionKpis(funnelConfig, phase, paid, from || undefined, to || undefined)
+      : null,
+    [funnelConfig, phase, paid, from, to]
   );
 
   const tableData = useMemo(
@@ -125,9 +164,15 @@ export default function DashboardPage() {
           className="w-48"
         />
         <Select
-          options={MOTION_OPTIONS}
-          value={motion}
-          onChange={(e) => setMotion(e.target.value)}
+          options={CHANNEL_OPTIONS}
+          value={channel}
+          onChange={(e) => setChannel(e.target.value)}
+          className="w-48"
+        />
+        <Select
+          options={MOTION_TYPE_OPTIONS}
+          value={motionType}
+          onChange={(e) => setMotionType(e.target.value)}
           className="w-48"
         />
         <input
@@ -160,7 +205,67 @@ export default function DashboardPage() {
               </Card>
             ))}
           </div>
-        ) : (
+        ) : phase === 'acquisition' && acqKpis ? (() => {
+          const arrChange = formatChange(acqKpis.newArrChange);
+          const arpuChange = formatChange(acqKpis.arpuChange);
+          const cacChange = acqKpis.isPaid
+            ? formatChangeInverted(acqKpis.cacOrConversionChange)
+            : formatChange(acqKpis.cacOrConversionChange);
+          const pbChange = formatChangeInverted(acqKpis.paybackChange);
+          const scChange = formatChangeInverted(acqKpis.salesCycleChange);
+          return (
+            <div className="grid grid-cols-4 gap-4">
+              <KpiCard
+                title="New ARR"
+                value={formatCurrency(acqKpis.newArr)}
+                subtitle={!from && !to ? 'This month' : 'Filtered period'}
+                trend={arrChange.trend}
+                trendValue={arrChange.text + ' vs last month'}
+              />
+              <KpiCard
+                title="ARPU"
+                value={formatCurrency(acqKpis.arpu)}
+                subtitle="Per customer"
+                trend={arpuChange.trend}
+                trendValue={arpuChange.text + ' vs last month'}
+              />
+              {acqKpis.isPaid ? (
+                <KpiCard
+                  title="CAC"
+                  value={formatCurrency(acqKpis.cacOrConversion)}
+                  subtitle="Cost per customer"
+                  trend={cacChange.trend}
+                  trendValue={cacChange.text + ' vs last month'}
+                />
+              ) : (
+                <KpiCard
+                  title="Conversion Rate"
+                  value={formatPercent(acqKpis.cacOrConversion)}
+                  subtitle="First stage → Win"
+                  trend={cacChange.trend}
+                  trendValue={cacChange.text + ' vs last month'}
+                />
+              )}
+              {acqKpis.isPaid ? (
+                <KpiCard
+                  title="Payback"
+                  value={formatMonths(acqKpis.paybackMonths)}
+                  subtitle="CAC / ARPU"
+                  trend={pbChange.trend}
+                  trendValue={pbChange.text + ' vs last month'}
+                />
+              ) : (
+                <KpiCard
+                  title="Sales Cycle"
+                  value={formatDays(acqKpis.salesCycleDays)}
+                  subtitle="First stage → Win"
+                  trend={scChange.trend}
+                  trendValue={scChange.text + ' vs last month'}
+                />
+              )}
+            </div>
+          );
+        })() : (
           <div className="grid grid-cols-4 gap-4">
             <KpiCard
               title="Total Revenue"
