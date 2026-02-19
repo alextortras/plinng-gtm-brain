@@ -18,6 +18,7 @@ import type {
   ScoreType,
 } from '@/types/database';
 import type { BrainInsight } from '@/lib/brain/insights';
+import type { FunnelConfig, PeriodType } from '@/lib/funnel-config';
 
 // --- Seeded PRNG (mulberry32) for deterministic values ---
 
@@ -499,9 +500,13 @@ const MOCK_REGISTRY: Record<string, MockResolver> = {
     const market = params.get('market');
     const motion = params.get('motion');
     const stage = params.get('stage');
+    const from = params.get('from');
+    const to = params.get('to');
     if (market) data = data.filter((m) => m.market === market);
     if (motion) data = data.filter((m) => m.motion === motion);
     if (stage) data = data.filter((m) => m.funnel_stage === stage);
+    if (from) data = data.filter((m) => m.date >= from);
+    if (to) data = data.filter((m) => m.date <= to);
     return data;
   },
 
@@ -554,4 +559,147 @@ export function resolveMockData(fullUrl: string): unknown | null {
   const resolver = MOCK_REGISTRY[path];
   if (!resolver) return null;
   return resolver(fullUrl);
+}
+
+// --- Phase metrics table mock data ---
+
+export interface PhaseTableData {
+  columns: string[];
+  values: Record<string, Record<string, number>>;
+}
+
+function generatePeriodColumns(period: PeriodType, from?: string, to?: string): string[] {
+  // End date: `to` or today
+  const end = to ? new Date(to + 'T00:00:00') : new Date();
+  // Start date: `from`, or a default lookback
+  let start: Date;
+  if (from) {
+    start = new Date(from + 'T00:00:00');
+  } else {
+    start = new Date(end);
+    if (period === 'daily') start.setDate(start.getDate() - 6);
+    else if (period === 'weekly') start.setDate(start.getDate() - 5 * 7);
+    else start.setMonth(start.getMonth() - 5);
+  }
+
+  const cols: string[] = [];
+
+  if (period === 'daily') {
+    const d = new Date(start);
+    while (d <= end) {
+      cols.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+      d.setDate(d.getDate() + 1);
+    }
+  } else if (period === 'weekly') {
+    // Snap start to Monday
+    const d = new Date(start);
+    const day = d.getDay();
+    d.setDate(d.getDate() - ((day + 6) % 7));
+    while (d <= end) {
+      const jan1 = new Date(d.getFullYear(), 0, 1);
+      const weekNum = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+      cols.push(`W${weekNum}`);
+      d.setDate(d.getDate() + 7);
+    }
+  } else {
+    const d = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (d <= end) {
+      cols.push(d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
+      d.setMonth(d.getMonth() + 1);
+    }
+  }
+
+  return cols;
+}
+
+export function generatePhaseTableData(
+  config: FunnelConfig,
+  period: PeriodType,
+  phase: string,
+  from?: string,
+  to?: string,
+  seed: number = 42,
+): PhaseTableData {
+  const rng = createRng(seed);
+  const columns = generatePeriodColumns(period, from, to);
+  const values: Record<string, Record<string, number>> = {};
+
+  for (const row of config.rows) {
+    values[row.key] = {};
+  }
+
+  const pMul = period === 'daily' ? 1 : period === 'weekly' ? 7 : 30;
+
+  // --- Retention ---
+  if (phase === 'retention') {
+    for (const col of columns) {
+      values['active_clients'][col] = Math.round(rngRange(rng, 180, 260));
+      values['churn_rate'][col] = rngRange(rng, 0.02, 0.05);
+      values['nrr'][col] = rngRange(rng, 0.95, 1.15);
+      values['grr'][col] = rngRange(rng, 0.88, 0.98);
+    }
+    return { columns, values };
+  }
+
+  // --- Expansion ---
+  if (phase === 'expansion') {
+    for (const col of columns) {
+      const upsell = Math.round(rngRange(rng, 3000, 8000) * pMul);
+      const crosssell = Math.round(rngRange(rng, 1000, 4000) * pMul);
+      const expansion = upsell + crosssell;
+      const downsell = Math.round(rngRange(rng, 500, 2000) * pMul);
+      const crosssellChurn = Math.round(rngRange(rng, 200, 1000) * pMul);
+      const contraction = downsell + crosssellChurn;
+
+      values['upsell_mrr'][col] = upsell;
+      values['crosssell_mrr'][col] = crosssell;
+      values['expansion_mrr'][col] = expansion;
+      values['downsell_mrr'][col] = downsell;
+      values['crosssell_churn_mrr'][col] = crosssellChurn;
+      values['contraction_mrr'][col] = contraction;
+      values['net_expansion_mrr'][col] = expansion - contraction;
+    }
+    return { columns, values };
+  }
+
+  // --- Acquisition ---
+  const volumeRows = config.rows.filter((r) => r.group === 'volume' && r.format === 'number');
+  const investmentRow = config.rows.find((r) => r.key === 'investment');
+  const conversionRows = config.rows.filter((r) => r.group === 'conversion');
+  const costRows = config.rows.filter((r) => r.group === 'cost');
+
+  for (const col of columns) {
+    // Investment (if present)
+    let investment = 0;
+    if (investmentRow) {
+      investment = Math.round(rngRange(rng, 1000, 3000) * pMul);
+      values[investmentRow.key][col] = investment;
+    }
+
+    // Volume funnel — each stage decays from the previous
+    let prev = Math.round(rngRange(rng, 150, 400) * pMul);
+    const volValues: number[] = [];
+
+    for (let i = 0; i < volumeRows.length; i++) {
+      values[volumeRows[i].key][col] = prev;
+      volValues.push(prev);
+      if (i < volumeRows.length - 1) {
+        prev = Math.max(1, Math.round(prev * rngRange(rng, 0.3, 0.6)));
+      }
+    }
+
+    // Conversions — derived from consecutive volume rows
+    for (let i = 0; i < conversionRows.length && i < volValues.length - 1; i++) {
+      values[conversionRows[i].key][col] = volValues[i] > 0 ? volValues[i + 1] / volValues[i] : 0;
+    }
+
+    // Costs — investment / each volume stage
+    if (investment > 0) {
+      for (let i = 0; i < costRows.length && i < volValues.length; i++) {
+        values[costRows[i].key][col] = volValues[i] > 0 ? investment / volValues[i] : 0;
+      }
+    }
+  }
+
+  return { columns, values };
 }

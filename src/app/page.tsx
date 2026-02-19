@@ -3,30 +3,36 @@
 import { useState, useMemo } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { KpiCard } from '@/components/kpi-card';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
-import { FunnelChart } from '@/components/charts/funnel-chart';
+import { Tabs } from '@/components/ui/tabs';
+import { PhaseMetricsTable } from '@/components/phase-metrics-table';
 import { DailyFunnelMetric } from '@/types/database';
+import {
+  MOTION_OPTIONS,
+  MOTION_API_MAP,
+  getPhaseFunnel,
+  type PeriodType,
+} from '@/lib/funnel-config';
+import { generatePhaseTableData } from '@/lib/mock-data';
+
+const PHASE_TABS = [
+  { value: 'acquisition', label: 'Acquisition' },
+  { value: 'retention', label: 'Retention' },
+  { value: 'expansion', label: 'Expansion' },
+];
+
+const PHASE_STAGES: Record<string, readonly string[]> = {
+  acquisition: ['awareness', 'education', 'selection', 'commit'],
+  retention: ['onboarding', 'impact'],
+  expansion: ['growth', 'advocacy'],
+};
 
 const MARKET_OPTIONS = [
   { value: '', label: 'All Markets' },
   { value: 'us', label: 'United States' },
   { value: 'spain', label: 'Spain' },
 ];
-
-const MOTION_OPTIONS = [
-  { value: '', label: 'All Motions' },
-  { value: 'outbound', label: 'Outbound' },
-  { value: 'partners', label: 'Partners' },
-  { value: 'paid_ads', label: 'Paid Ads' },
-  { value: 'organic', label: 'Organic' },
-  { value: 'plg', label: 'PLG' },
-];
-
-const STAGES = [
-  'awareness', 'education', 'selection', 'commit',
-  'onboarding', 'impact', 'growth', 'advocacy',
-] as const;
 
 function formatCurrency(val: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -44,47 +50,56 @@ function formatNumber(val: number): string {
 export default function DashboardPage() {
   const [market, setMarket] = useState('');
   const [motion, setMotion] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [phase, setPhase] = useState('acquisition');
+  const [period, setPeriod] = useState<PeriodType>('weekly');
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
     if (market) p.market = market;
-    if (motion) p.motion = motion;
+    if (motion) {
+      p.motion = MOTION_API_MAP[motion] || motion;
+    }
+    if (from) p.from = from;
+    if (to) p.to = to;
     return p;
-  }, [market, motion]);
+  }, [market, motion, from, to]);
 
   const { data: metrics, loading } = useApi<DailyFunnelMetric[]>(
     '/api/funnel-metrics',
     params
   );
 
+  const phaseMetrics = useMemo(() => {
+    if (!metrics) return [];
+    const stages = PHASE_STAGES[phase] ?? [];
+    return metrics.filter((m) => stages.includes(m.funnel_stage));
+  }, [metrics, phase]);
+
   const kpis = useMemo(() => {
-    if (!metrics || metrics.length === 0) {
+    if (phaseMetrics.length === 0) {
       return { totalRevenue: 0, totalPipeline: 0, blendedCac: 0, totalLeads: 0 };
     }
 
-    const totalRevenue = metrics.reduce((s, m) => s + Number(m.revenue), 0);
-    const totalPipeline = metrics.reduce((s, m) => s + Number(m.pipeline_value), 0);
-    const totalSpend = metrics.reduce((s, m) => s + Number(m.spend), 0);
-    const totalLeads = metrics.reduce((s, m) => s + m.leads_count, 0);
+    const totalRevenue = phaseMetrics.reduce((s, m) => s + Number(m.revenue), 0);
+    const totalPipeline = phaseMetrics.reduce((s, m) => s + Number(m.pipeline_value), 0);
+    const totalSpend = phaseMetrics.reduce((s, m) => s + Number(m.spend), 0);
+    const totalLeads = phaseMetrics.reduce((s, m) => s + m.leads_count, 0);
     const blendedCac = totalLeads > 0 ? totalSpend / totalLeads : 0;
 
     return { totalRevenue, totalPipeline, blendedCac, totalLeads };
-  }, [metrics]);
+  }, [phaseMetrics]);
 
-  const funnelData = useMemo(() => {
-    if (!metrics) return [];
+  const funnelConfig = useMemo(
+    () => getPhaseFunnel(phase, motion || 'paid_ads'),
+    [phase, motion]
+  );
 
-    return STAGES.map((stage) => {
-      const stageMetrics = metrics.filter((m) => m.funnel_stage === stage);
-      const us = stageMetrics
-        .filter((m) => m.market === 'us')
-        .reduce((s, m) => s + m.leads_count, 0);
-      const spain = stageMetrics
-        .filter((m) => m.market === 'spain')
-        .reduce((s, m) => s + m.leads_count, 0);
-      return { stage, us, spain };
-    });
-  }, [metrics]);
+  const tableData = useMemo(
+    () => generatePhaseTableData(funnelConfig, period, phase, from || undefined, to || undefined),
+    [funnelConfig, period, phase, from, to]
+  );
 
   return (
     <div className="space-y-6">
@@ -102,60 +117,74 @@ export default function DashboardPage() {
           onChange={(e) => setMotion(e.target.value)}
           className="w-48"
         />
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          placeholder="From"
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          placeholder="To"
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+        />
       </div>
 
-      {/* KPI Cards */}
-      {loading ? (
-        <div className="grid grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 w-24 rounded bg-muted" />
-                <div className="mt-3 h-8 w-32 rounded bg-muted" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-4 gap-4">
-          <KpiCard
-            title="Total Revenue"
-            value={formatCurrency(kpis.totalRevenue)}
-            subtitle="90-day total"
-          />
-          <KpiCard
-            title="Total Pipeline"
-            value={formatCurrency(kpis.totalPipeline)}
-            subtitle="Active pipeline"
-          />
-          <KpiCard
-            title="Blended CAC"
-            value={formatCurrency(kpis.blendedCac)}
-            subtitle="Per lead"
-          />
-          <KpiCard
-            title="Total Leads"
-            value={formatNumber(kpis.totalLeads)}
-            subtitle="Across all stages"
-          />
-        </div>
-      )}
+      {/* Phase Tabs */}
+      <Tabs tabs={PHASE_TABS} defaultValue="acquisition" onValueChange={setPhase}>
+        {/* KPI Cards */}
+        {loading ? (
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-6">
+                  <div className="h-4 w-24 rounded bg-muted" />
+                  <div className="mt-3 h-8 w-32 rounded bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-4">
+            <KpiCard
+              title="Total Revenue"
+              value={formatCurrency(kpis.totalRevenue)}
+              subtitle="90-day total"
+            />
+            <KpiCard
+              title="Total Pipeline"
+              value={formatCurrency(kpis.totalPipeline)}
+              subtitle="Active pipeline"
+            />
+            <KpiCard
+              title="Blended CAC"
+              value={formatCurrency(kpis.blendedCac)}
+              subtitle="Per lead"
+            />
+            <KpiCard
+              title="Total Leads"
+              value={formatNumber(kpis.totalLeads)}
+              subtitle="Across all stages"
+            />
+          </div>
+        )}
 
-      {/* Bowtie Funnel Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Bowtie Funnel — Leads by Stage</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex h-[350px] items-center justify-center">
-              <p className="text-muted-foreground">Loading chart...</p>
-            </div>
-          ) : (
-            <FunnelChart data={funnelData} />
-          )}
-        </CardContent>
-      </Card>
+        {/* Metrics Table */}
+        <Card className="mt-4">
+          <CardContent className="pt-4">
+            <PhaseMetricsTable
+              config={funnelConfig}
+              data={tableData}
+              period={period}
+              onPeriodChange={setPeriod}
+              showMotionPrompt={phase === 'acquisition' && !motion}
+            />
+          </CardContent>
+        </Card>
+      </Tabs>
     </div>
   );
 }
