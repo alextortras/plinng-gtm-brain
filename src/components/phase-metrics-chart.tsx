@@ -16,7 +16,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import type { FunnelConfig, PeriodType } from '@/lib/funnel-config';
+import type { FunnelConfig } from '@/lib/funnel-config';
 import type { PhaseTableData } from '@/lib/mock-data';
 
 type ChartType = 'line' | 'bar' | 'area';
@@ -27,12 +27,7 @@ const CHART_TYPES: { value: ChartType; label: string }[] = [
   { value: 'area', label: 'Area' },
 ];
 
-const PERIODS: { value: PeriodType; label: string }[] = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-];
-
+// Chart colors — match CSS variables --chart-1 and --chart-2 in globals.css
 const COLORS = ['#1d4ed8', '#7c3aed'];
 
 function formatTickValue(value: number, format: 'number' | 'currency' | 'percent'): string {
@@ -50,15 +45,11 @@ function formatTickValue(value: number, format: 'number' | 'currency' | 'percent
 interface PhaseMetricsChartProps {
   config: FunnelConfig;
   data: PhaseTableData;
-  period: PeriodType;
-  onPeriodChange: (period: PeriodType) => void;
 }
 
 export function PhaseMetricsChart({
   config,
   data,
-  period,
-  onPeriodChange,
 }: PhaseMetricsChartProps) {
   const [chartType, setChartType] = useState<ChartType>('line');
   const [metric1, setMetric1] = useState<string>(() => config.rows[0]?.key ?? '');
@@ -97,6 +88,11 @@ export function PhaseMetricsChart({
 
   const needsDualAxis = selectedRows.length === 2 && selectedRows[0]!.format !== selectedRows[1]!.format;
 
+  // Dynamic chart title from selected metrics
+  const chartTitle = selectedRows.map((r) => r.label).join(' vs ');
+
+  const hasData = data.columns.length > 0;
+
   return (
     <div>
       {/* Controls row */}
@@ -111,7 +107,6 @@ export function PhaseMetricsChart({
             onChange={(e) => {
               const val = e.target.value;
               setMetric1(val);
-              // If user picks the same as metric2, clear metric2
               if (val === metric2) setMetric2('');
             }}
             className="h-9 rounded-md border border-border bg-background px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -154,7 +149,7 @@ export function PhaseMetricsChart({
                 key={ct.value}
                 onClick={() => setChartType(ct.value)}
                 className={cn(
-                  'px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  'px-3 py-1.5 text-xs font-medium transition-colors',
                   chartType === ct.value
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
@@ -165,33 +160,23 @@ export function PhaseMetricsChart({
             ))}
           </div>
         </div>
-
-        {/* Period */}
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Period</p>
-          <div className="inline-flex rounded-md border border-border overflow-hidden">
-            {PERIODS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => onPeriodChange(p.value)}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium transition-colors',
-                  period === p.value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                )}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
+      {/* Chart title */}
+      {chartTitle && (
+        <p className="mb-3 text-sm font-medium text-muted-foreground">{chartTitle}</p>
+      )}
+
       {/* Chart */}
-      <ResponsiveContainer width="100%" height={350}>
-        {renderChart(chartType, chartData, selectedRows, needsDualAxis)}
-      </ResponsiveContainer>
+      {!hasData ? (
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          No data for the selected filters. Try adjusting the date range.
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={350}>
+          {renderChart(chartType, chartData, selectedRows, needsDualAxis)}
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

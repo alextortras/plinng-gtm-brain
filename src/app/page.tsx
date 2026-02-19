@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
 import { KpiCard } from '@/components/kpi-card';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
@@ -30,6 +32,12 @@ const PHASE_TABS = [
 const VIEW_TABS = [
   { value: 'table', label: 'Table' },
   { value: 'graph', label: 'Graph' },
+];
+
+const PERIODS: { value: PeriodType; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
 ];
 
 const MARKET_OPTIONS = [
@@ -86,10 +94,18 @@ export default function DashboardPage() {
   const [to, setTo] = useState('');
   const [phase, setPhase] = useState('acquisition');
   const [view, setView] = useState('table');
-  const [tablePeriod, setTablePeriod] = useState<PeriodType>('weekly');
-  const [chartPeriod, setChartPeriod] = useState<PeriodType>('weekly');
+  const [period, setPeriod] = useState<PeriodType>('weekly');
 
   const paid = isPaidChannel(channel);
+  const hasFilters = market || channel || motionType || from || to;
+
+  const resetFilters = () => {
+    setMarket('');
+    setChannel('');
+    setMotionType('');
+    setFrom('');
+    setTo('');
+  };
 
   const funnelConfig = useMemo(
     () => getPhaseFunnel(phase, channel, motionType),
@@ -117,52 +133,67 @@ export default function DashboardPage() {
     [funnelConfig, phase, from, to]
   );
 
-  const tableData = useMemo(
-    () => generatePhaseTableData(funnelConfig, tablePeriod, phase, from || undefined, to || undefined),
-    [funnelConfig, tablePeriod, phase, from, to]
-  );
-
-  const chartData = useMemo(
-    () => generatePhaseTableData(funnelConfig, chartPeriod, phase, from || undefined, to || undefined),
-    [funnelConfig, chartPeriod, phase, from, to]
+  const viewData = useMemo(
+    () => generatePhaseTableData(funnelConfig, period, phase, from || undefined, to || undefined),
+    [funnelConfig, period, phase, from, to]
   );
 
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-end gap-3">
+        {/* Dimension filters */}
         <Select
           options={MARKET_OPTIONS}
           value={market}
           onChange={(e) => setMarket(e.target.value)}
-          className="w-48"
+          className="w-40"
         />
         <Select
           options={CHANNEL_OPTIONS}
           value={channel}
           onChange={(e) => setChannel(e.target.value)}
-          className="w-48"
+          className="w-40"
         />
         <Select
           options={MOTION_TYPE_OPTIONS}
           value={motionType}
           onChange={(e) => setMotionType(e.target.value)}
-          className="w-48"
+          className="w-36"
         />
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          placeholder="From"
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          placeholder="To"
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+
+        {/* Date range */}
+        <div className="flex items-end gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+
+        {/* Reset */}
+        {hasFilters && (
+          <button
+            onClick={resetFilters}
+            className="flex h-10 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+            Reset
+          </button>
+        )}
       </div>
 
       {/* Phase Tabs */}
@@ -177,7 +208,7 @@ export default function DashboardPage() {
           const pbChange = formatChangeInverted(acqKpis.paybackChange);
           const scChange = formatChangeInverted(acqKpis.salesCycleChange);
           return (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard
                 title="New ARR"
                 value={formatCurrency(acqKpis.newArr)}
@@ -234,7 +265,7 @@ export default function DashboardPage() {
           const nrrChange = formatChange(retKpis.nrrChange);
           const grrChange = formatChange(retKpis.grrChange);
           return (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard
                 title="Active Clients"
                 value={formatNumber(retKpis.activeClients)}
@@ -271,7 +302,7 @@ export default function DashboardPage() {
           const coChange = formatChangeInverted(expKpis.contractionMrrChange);
           const erChange = formatChange(expKpis.expansionRateChange);
           return (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard
                 title="Net Expansion MRR"
                 value={formatCurrency(expKpis.netExpansionMrr)}
@@ -304,26 +335,41 @@ export default function DashboardPage() {
           );
         })() : null}
 
-        {/* Table / Graph sub-tabs */}
+        {/* Table / Graph section */}
         <Card className="mt-4">
           <CardContent className="pt-4">
-            <Tabs tabs={VIEW_TABS} defaultValue="table" onValueChange={setView}>
-              {view === 'table' ? (
-                <PhaseMetricsTable
-                  config={funnelConfig}
-                  data={tableData}
-                  period={tablePeriod}
-                  onPeriodChange={setTablePeriod}
-                />
-              ) : (
-                <PhaseMetricsChart
-                  config={funnelConfig}
-                  data={chartData}
-                  period={chartPeriod}
-                  onPeriodChange={setChartPeriod}
-                />
-              )}
-            </Tabs>
+            {/* Controls bar: view toggle left, period selector right */}
+            <div className="mb-4 flex items-center justify-between">
+              <Tabs tabs={VIEW_TABS} defaultValue="table" variant="segmented" onValueChange={setView} />
+              <div className="inline-flex rounded-md border border-border overflow-hidden">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.value}
+                    onClick={() => setPeriod(p.value)}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium transition-colors',
+                      period === p.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {view === 'table' ? (
+              <PhaseMetricsTable
+                config={funnelConfig}
+                data={viewData}
+              />
+            ) : (
+              <PhaseMetricsChart
+                config={funnelConfig}
+                data={viewData}
+              />
+            )}
           </CardContent>
         </Card>
       </Tabs>

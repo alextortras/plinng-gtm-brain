@@ -25,6 +25,9 @@
   --urgency-high: #ef4444;
   --urgency-medium: #f59e0b;
   --urgency-low: #22c55e;
+
+  --chart-1: #1d4ed8;
+  --chart-2: #7c3aed;
 }
 
 @theme inline {
@@ -48,6 +51,8 @@
   --color-urgency-high: var(--urgency-high);
   --color-urgency-medium: var(--urgency-medium);
   --color-urgency-low: var(--urgency-low);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
