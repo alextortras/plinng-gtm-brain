@@ -1,89 +1,37 @@
 'use client';
 
-import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
-import { ArrowRight, Plus, X } from 'lucide-react';
-import type { SourceFieldOption, ValueMapEntry } from '@/types/integrations';
+import type { SourceFieldOption } from '@/types/integrations';
 
 interface DimensionMappingSectionProps {
   label: string;
   description: string;
-  allowedValues: { value: string; label: string }[];
+  required: boolean;
   sourceFields: SourceFieldOption[];
   selectedSourceField: string;
   onSourceFieldChange: (field: string) => void;
-  valueMap: ValueMapEntry[];
-  onValueMapChange: (entries: ValueMapEntry[]) => void;
-  suggestions?: Record<string, string>;
+  providerLabel?: string;
 }
 
 export function DimensionMappingSection({
   label,
   description,
-  allowedValues,
+  required,
   sourceFields,
   selectedSourceField,
   onSourceFieldChange,
-  valueMap,
-  onValueMapChange,
-  suggestions,
+  providerLabel = 'Source',
 }: DimensionMappingSectionProps) {
-  const [newSourceValue, setNewSourceValue] = useState('');
-
   const enumFields = sourceFields.filter((f) => f.type === 'enumeration');
   const fieldOptions = enumFields.map((f) => ({ value: f.name, label: f.label }));
-  const targetOptions = allowedValues.map((v) => ({ value: v.value, label: v.label }));
 
-  const mappedCount = valueMap.filter((e) => e.target_value).length;
-  const totalCount = valueMap.length;
-  const status: 'mapped' | 'partial' | 'unmapped' =
-    totalCount === 0 || !selectedSourceField
-      ? 'unmapped'
-      : mappedCount === totalCount
-        ? 'mapped'
-        : 'partial';
+  const selectedField = enumFields.find((f) => f.name === selectedSourceField);
+  const fieldValues = selectedField?.options ?? [];
 
-  const statusBadge = {
-    mapped: { label: 'Mapped', variant: 'low' as const },
-    partial: { label: 'Partial', variant: 'medium' as const },
-    unmapped: { label: 'Unmapped', variant: 'outline' as const },
-  };
-
-  const updateEntry = (index: number, targetValue: string) => {
-    const next = [...valueMap];
-    next[index] = { ...next[index], target_value: targetValue };
-    onValueMapChange(next);
-  };
-
-  const removeEntry = (index: number) => {
-    onValueMapChange(valueMap.filter((_, i) => i !== index));
-  };
-
-  const addCustomValue = () => {
-    const trimmed = newSourceValue.trim();
-    if (!trimmed || valueMap.some((e) => e.source_value === trimmed)) return;
-    const suggestedTarget = suggestions?.[trimmed] ?? '';
-    onValueMapChange([...valueMap, { source_value: trimmed, target_value: suggestedTarget }]);
-    setNewSourceValue('');
-  };
-
-  const handleSourceFieldChange = (field: string) => {
-    onSourceFieldChange(field);
-    // When source field changes and we have suggestions, pre-fill value map
-    if (field && suggestions && valueMap.length === 0) {
-      const entries: ValueMapEntry[] = Object.entries(suggestions).map(([source, target]) => ({
-        source_value: source,
-        target_value: target,
-      }));
-      if (entries.length > 0) {
-        onValueMapChange(entries);
-      }
-    }
-  };
-
-  const badge = statusBadge[status];
+  const isMapped = !!selectedSourceField;
+  const statusLabel = isMapped ? 'Mapped' : required ? 'Required' : 'Optional';
+  const statusVariant = isMapped ? ('low' as const) : required ? ('outline' as const) : ('outline' as const);
 
   return (
     <div className="space-y-3">
@@ -91,83 +39,43 @@ export function DimensionMappingSection({
 
       {/* Property selector */}
       <div className="flex items-center gap-4">
-        <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Source property:</label>
-        <div className="w-64">
+        <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">{providerLabel} property:</label>
+        <div className="min-w-[280px]">
           <Select
             options={fieldOptions}
             placeholder={`Select ${label.toLowerCase()} field...`}
             value={selectedSourceField}
-            onChange={(e) => handleSourceFieldChange(e.target.value)}
+            onChange={(e) => onSourceFieldChange(e.target.value)}
             className="h-8 text-xs"
           />
         </div>
-        <Badge variant={badge.variant}>{badge.label}</Badge>
+        <Badge variant={statusVariant}>{statusLabel}</Badge>
       </div>
 
-      {/* Value mapping table */}
-      {selectedSourceField && (
-        <div className="rounded-lg border border-border">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-4 py-2 font-medium">Source Value</th>
-                <th className="w-8 px-2 py-2" />
-                <th className="px-4 py-2 font-medium">Target Value</th>
-                <th className="w-10 px-2 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {valueMap.map((entry, index) => (
-                <tr key={entry.source_value} className="border-b border-border last:border-0">
-                  <td className="px-4 py-2">
-                    <code className="text-xs">{entry.source_value}</code>
-                  </td>
-                  <td className="px-2 py-2 text-muted-foreground">
-                    <ArrowRight className="h-3 w-3" />
-                  </td>
-                  <td className="px-4 py-2">
-                    <Select
-                      options={targetOptions}
-                      placeholder="Select..."
-                      value={entry.target_value}
-                      onChange={(e) => updateEntry(index, e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                  </td>
-                  <td className="px-2 py-2">
-                    <button
-                      onClick={() => removeEntry(index)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Add custom value row */}
-          <div className="flex items-center gap-2 border-t border-border px-4 py-2">
-            <input
-              type="text"
-              placeholder="Add custom source value..."
-              value={newSourceValue}
-              onChange={(e) => setNewSourceValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addCustomValue()}
-              className="h-7 flex-1 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addCustomValue}
-              disabled={!newSourceValue.trim()}
-              className="h-7 px-2 text-xs"
-            >
-              <Plus className="mr-1 h-3 w-3" />
-              Add
-            </Button>
+      {/* Read-only value preview */}
+      {selectedSourceField && fieldValues.length > 0 && (
+        <div className="ml-4 border-l-2 border-border pl-4">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Values found in &quot;{selectedField?.label}&quot;:
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {fieldValues.map((opt) => (
+              <span
+                key={opt.value}
+                className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+              >
+                {opt.label}
+              </span>
+            ))}
           </div>
+        </div>
+      )}
+
+      {selectedSourceField && fieldValues.length === 0 && (
+        <div className="ml-4 border-l-2 border-border pl-4">
+          <p className="text-xs text-muted-foreground">
+            No predefined values found for this field. Values will be read directly from your data.
+          </p>
         </div>
       )}
     </div>

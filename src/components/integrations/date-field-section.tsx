@@ -18,7 +18,7 @@ export function DateFieldSection({ sourceFields, selectedField, onChange }: Date
 
   return (
     <div className="flex items-center gap-4">
-      <div className="w-64">
+      <div className="min-w-[280px]">
         <Select
           options={options}
           placeholder="Select date field..."

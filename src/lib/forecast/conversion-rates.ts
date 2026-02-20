@@ -1,4 +1,4 @@
-import { DailyFunnelMetric, FunnelStage, Market, SalesMotion } from '@/types/database';
+import { DailyFunnelMetric } from '@/types/database';
 
 export interface ConversionStats {
   mean: number;
@@ -28,16 +28,17 @@ function computeStats(values: number[]): ConversionStats {
   return { mean, median, p75, count: n };
 }
 
-function makeKey(stage: FunnelStage, motion: SalesMotion, market: Market): string {
-  return `${stage}|${motion}|${market}`;
+function makeKey(stage: string, motion: string, market: string, channel: string | null): string {
+  return `${stage}|${motion}|${market}|${channel ?? ''}`;
 }
 
-export function parseKey(key: string): { stage: FunnelStage; motion: SalesMotion; market: Market } {
-  const [stage, motion, market] = key.split('|');
+export function parseKey(key: string): { stage: string; motion: string; market: string; channel: string | null } {
+  const [stage, motion, market, channel] = key.split('|');
   return {
-    stage: stage as FunnelStage,
-    motion: motion as SalesMotion,
-    market: market as Market,
+    stage,
+    motion,
+    market,
+    channel: channel || null,
   };
 }
 
@@ -49,7 +50,7 @@ export function computeConversionRates(metrics: DailyFunnelMetric[]): Conversion
   const groups = new Map<string, number[]>();
 
   for (const m of metrics) {
-    const key = makeKey(m.funnel_stage, m.motion, m.market);
+    const key = makeKey(m.funnel_stage, m.motion, m.market, m.channel);
     const rates = groups.get(key) ?? [];
     rates.push(Number(m.conversion_rate));
     groups.set(key, rates);
@@ -64,7 +65,7 @@ export function computeConversionRates(metrics: DailyFunnelMetric[]): Conversion
 }
 
 /**
- * Get the pipeline value aggregated by stage/motion/market.
+ * Get the pipeline value aggregated by stage/motion/market/channel.
  */
 export function aggregatePipeline(
   metrics: DailyFunnelMetric[]
@@ -72,7 +73,7 @@ export function aggregatePipeline(
   const groups = new Map<string, DailyFunnelMetric[]>();
 
   for (const m of metrics) {
-    const key = makeKey(m.funnel_stage, m.motion, m.market);
+    const key = makeKey(m.funnel_stage, m.motion, m.market, m.channel);
     const rows = groups.get(key) ?? [];
     rows.push(m);
     groups.set(key, rows);

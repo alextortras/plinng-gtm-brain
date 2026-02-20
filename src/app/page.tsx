@@ -10,12 +10,11 @@ import { Tabs } from '@/components/ui/tabs';
 import { PhaseMetricsTable } from '@/components/phase-metrics-table';
 import { PhaseMetricsChart } from '@/components/phase-metrics-chart';
 import {
-  CHANNEL_OPTIONS,
-  MOTION_TYPE_OPTIONS,
-  isPaidChannel,
+  isPaidMotion,
   getPhaseFunnel,
   type PeriodType,
 } from '@/lib/funnel-config';
+import { useDimensionOptions } from '@/hooks/use-dimension-options';
 import {
   generatePhaseTableData,
   generateAcquisitionKpis,
@@ -38,12 +37,6 @@ const PERIODS: { value: PeriodType; label: string }[] = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
-];
-
-const MARKET_OPTIONS = [
-  { value: '', label: 'All Markets' },
-  { value: 'us', label: 'United States' },
-  { value: 'spain', label: 'Spain' },
 ];
 
 function formatCurrency(val: number): string {
@@ -87,6 +80,7 @@ function formatDays(val: number): string {
 }
 
 export default function DashboardPage() {
+  const { marketOptions, channelOptions, motionOptions } = useDimensionOptions();
   const [market, setMarket] = useState('');
   const [channel, setChannel] = useState('');
   const [motionType, setMotionType] = useState('');
@@ -96,7 +90,7 @@ export default function DashboardPage() {
   const [view, setView] = useState('table');
   const [period, setPeriod] = useState<PeriodType>('weekly');
 
-  const paid = isPaidChannel(channel);
+  const paid = isPaidMotion(motionType);
   const hasFilters = market || channel || motionType || from || to;
 
   const resetFilters = () => {
@@ -108,34 +102,34 @@ export default function DashboardPage() {
   };
 
   const funnelConfig = useMemo(
-    () => getPhaseFunnel(phase, channel, motionType),
-    [phase, channel, motionType]
+    () => getPhaseFunnel(phase, motionType),
+    [phase, motionType]
   );
 
   const acqKpis = useMemo(
     () => phase === 'acquisition'
-      ? generateAcquisitionKpis(funnelConfig, phase, paid, from || undefined, to || undefined)
+      ? generateAcquisitionKpis(funnelConfig, phase, paid, from || undefined, to || undefined, market || undefined, channel || undefined)
       : null,
-    [funnelConfig, phase, paid, from, to]
+    [funnelConfig, phase, paid, from, to, market, channel]
   );
 
   const retKpis = useMemo(
     () => phase === 'retention'
-      ? generateRetentionKpis(funnelConfig, from || undefined, to || undefined)
+      ? generateRetentionKpis(funnelConfig, from || undefined, to || undefined, market || undefined, channel || undefined)
       : null,
-    [funnelConfig, phase, from, to]
+    [funnelConfig, phase, from, to, market, channel]
   );
 
   const expKpis = useMemo(
     () => phase === 'expansion'
-      ? generateExpansionKpis(funnelConfig, from || undefined, to || undefined)
+      ? generateExpansionKpis(funnelConfig, from || undefined, to || undefined, market || undefined, channel || undefined)
       : null,
-    [funnelConfig, phase, from, to]
+    [funnelConfig, phase, from, to, market, channel]
   );
 
   const viewData = useMemo(
-    () => generatePhaseTableData(funnelConfig, period, phase, from || undefined, to || undefined),
-    [funnelConfig, period, phase, from, to]
+    () => generatePhaseTableData(funnelConfig, period, phase, from || undefined, to || undefined, 42, market || undefined, channel || undefined),
+    [funnelConfig, period, phase, from, to, market, channel]
   );
 
   return (
@@ -144,23 +138,25 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-end gap-3">
         {/* Dimension filters */}
         <Select
-          options={MARKET_OPTIONS}
+          options={marketOptions}
           value={market}
           onChange={(e) => setMarket(e.target.value)}
           className="w-40"
         />
         <Select
-          options={CHANNEL_OPTIONS}
+          options={channelOptions}
           value={channel}
           onChange={(e) => setChannel(e.target.value)}
           className="w-40"
         />
-        <Select
-          options={MOTION_TYPE_OPTIONS}
-          value={motionType}
-          onChange={(e) => setMotionType(e.target.value)}
-          className="w-36"
-        />
+        {motionOptions.length > 1 && (
+          <Select
+            options={motionOptions}
+            value={motionType}
+            onChange={(e) => setMotionType(e.target.value)}
+            className="w-36"
+          />
+        )}
 
         {/* Date range */}
         <div className="flex items-end gap-2">

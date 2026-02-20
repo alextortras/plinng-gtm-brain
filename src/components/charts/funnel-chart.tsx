@@ -12,24 +12,40 @@ import {
 } from 'recharts';
 
 interface FunnelChartProps {
-  data: { stage: string; us: number; spain: number }[];
+  data: Record<string, string | number>[];
+  /** Bar keys to render (e.g. market codes). Extracted from data if omitted. */
+  bars?: { key: string; label: string; color: string }[];
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  awareness: 'Awareness',
-  education: 'Education',
-  selection: 'Selection',
-  commit: 'Commit',
-  onboarding: 'Onboarding',
-  impact: 'Impact',
-  growth: 'Growth',
-  advocacy: 'Advocacy',
-};
+const DEFAULT_COLORS = ['#1d4ed8', '#7c3aed', '#059669', '#d97706', '#dc2626'];
 
-export function FunnelChart({ data }: FunnelChartProps) {
+function formatStageLabel(stage: string): string {
+  return stage
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function FunnelChart({ data, bars }: FunnelChartProps) {
+  // Auto-detect bar keys if not provided: all keys except 'stage' and 'name'
+  const resolvedBars = bars ?? (() => {
+    const keys = new Set<string>();
+    for (const row of data) {
+      for (const k of Object.keys(row)) {
+        if (k !== 'stage' && k !== 'name' && typeof row[k] === 'number') {
+          keys.add(k);
+        }
+      }
+    }
+    return [...keys].map((k, i) => ({
+      key: k,
+      label: formatStageLabel(k),
+      color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+    }));
+  })();
+
   const formatted = data.map((d) => ({
     ...d,
-    name: STAGE_LABELS[d.stage] ?? d.stage,
+    name: d.name ?? (typeof d.stage === 'string' ? formatStageLabel(d.stage) : ''),
   }));
 
   return (
@@ -40,8 +56,15 @@ export function FunnelChart({ data }: FunnelChartProps) {
         <YAxis tick={{ fontSize: 12 }} />
         <Tooltip />
         <Legend />
-        <Bar dataKey="us" name="US" fill="#1d4ed8" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="spain" name="Spain" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+        {resolvedBars.map((bar) => (
+          <Bar
+            key={bar.key}
+            dataKey={bar.key}
+            name={bar.label}
+            fill={bar.color}
+            radius={[4, 4, 0, 0]}
+          />
+        ))}
       </BarChart>
     </ResponsiveContainer>
   );

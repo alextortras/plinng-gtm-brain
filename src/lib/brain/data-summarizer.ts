@@ -3,6 +3,7 @@ import { DailyFunnelMetric, AccountScore, RepKpi } from '@/types/database';
 interface MetricSummary {
   market: string;
   motion: string;
+  channel: string | null;
   stage: string;
   avg_leads: number;
   avg_conversion: number;
@@ -33,7 +34,7 @@ export function summarizeFunnelMetrics(metrics: DailyFunnelMetric[]): MetricSumm
   const groups = new Map<string, DailyFunnelMetric[]>();
 
   for (const row of metrics) {
-    const key = `${row.market}|${row.motion}|${row.funnel_stage}`;
+    const key = `${row.market}|${row.motion}|${row.channel ?? ''}|${row.funnel_stage}`;
     const group = groups.get(key) ?? [];
     group.push(row);
     groups.set(key, group);
@@ -42,12 +43,13 @@ export function summarizeFunnelMetrics(metrics: DailyFunnelMetric[]): MetricSumm
   const summaries: MetricSummary[] = [];
 
   for (const [key, rows] of groups) {
-    const [market, motion, stage] = key.split('|');
+    const [market, motion, channel, stage] = key.split('|');
     const n = rows.length;
 
     summaries.push({
       market,
       motion,
+      channel: channel || null,
       stage,
       avg_leads: Math.round(rows.reduce((s, r) => s + r.leads_count, 0) / n),
       avg_conversion: Number((rows.reduce((s, r) => s + Number(r.conversion_rate), 0) / n).toFixed(4)),

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser, AuthError } from '@/lib/auth';
 import { getFunnelMetrics, FunnelMetricsFilters } from '@/lib/queries/funnel-metrics';
-import { FunnelStage, Market, SalesMotion } from '@/types/database';
 import { isDemoMode, resolveMockData } from '@/lib/mock-data';
 
 export async function GET(request: NextRequest) {
@@ -23,9 +22,10 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
 
   const filters: FunnelMetricsFilters = {};
-  if (params.has('market')) filters.market = params.get('market') as Market;
-  if (params.has('motion')) filters.motion = params.get('motion') as SalesMotion;
-  if (params.has('stage')) filters.stage = params.get('stage') as FunnelStage;
+  if (params.has('market')) filters.market = params.get('market')!;
+  if (params.has('motion')) filters.motion = params.get('motion')!;
+  if (params.has('channel')) filters.channel = params.get('channel')!;
+  if (params.has('stage')) filters.stage = params.get('stage')!;
   if (params.has('from')) filters.from = params.get('from')!;
   if (params.has('to')) filters.to = params.get('to')!;
   if (params.has('limit')) filters.limit = parseInt(params.get('limit')!, 10);

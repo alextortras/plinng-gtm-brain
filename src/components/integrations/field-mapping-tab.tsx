@@ -3,29 +3,27 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle2, Circle } from 'lucide-react';
-import { StageMappingTable } from '@/components/integrations/stage-mapping-table';
 import { DateFieldSection } from '@/components/integrations/date-field-section';
 import { DimensionMappingSection } from '@/components/integrations/dimension-mapping-section';
-import { FieldMappingTable } from '@/components/integrations/field-mapping-table';
-import {
-  DIMENSION_CONFIGS,
-  METRIC_TARGET_FIELDS,
-  HUBSPOT_MOTION_SUGGESTIONS,
-  HUBSPOT_MARKET_SUGGESTIONS,
-} from '@/lib/integrations/target-fields';
+import { DIMENSION_CONFIGS } from '@/lib/integrations/target-fields';
 import type { IntegrationFieldMapping } from '@/types/database';
-import type { StageMappingRow, SourceFieldOption, SourceFieldsByObject, ValueMapEntry } from '@/types/integrations';
+import type { SourceFieldOption, SourceFieldsByObject } from '@/types/integrations';
 
 interface FieldMappingTabProps {
   provider: string;
   mappings: IntegrationFieldMapping[];
   sourceFields: SourceFieldsByObject;
-  stageMappings: StageMappingRow[];
-  onStageMappingsChange: (stages: StageMappingRow[]) => void;
   onSave: (mappings: IntegrationFieldMapping[]) => void;
   saving?: boolean;
 }
+
+const PROVIDER_LABELS: Record<string, string> = {
+  hubspot: 'HubSpot',
+  google_ads: 'Google Ads',
+  meta_ads: 'Meta Ads',
+};
 
 // Flatten all source fields from all objects into a single list
 function flattenSourceFields(sourceFields: SourceFieldsByObject): SourceFieldOption[] {
@@ -55,77 +53,51 @@ function extractDimensionMapping(mappings: IntegrationFieldMapping[], dimension:
   );
 }
 
-function extractValueMap(mapping: IntegrationFieldMapping | undefined): ValueMapEntry[] {
-  if (!mapping?.transform_rule) return [];
-  const rule = mapping.transform_rule as { type?: string; value_map?: Record<string, string> };
-  if (rule.type !== 'value_map' || !rule.value_map) return [];
-  return Object.entries(rule.value_map).map(([source_value, target_value]) => ({
-    source_value,
-    target_value,
-  }));
-}
-
-// Get metric-only mappings (exclude date, market, motion, funnel_stage)
-const DIMENSION_FIELDS = new Set(['date', 'market', 'motion', 'funnel_stage']);
-function getMetricMappings(mappings: IntegrationFieldMapping[]): IntegrationFieldMapping[] {
-  return mappings.filter(
-    (m) => !(m.target_table === 'daily_funnel_metrics' && DIMENSION_FIELDS.has(m.target_field))
-  );
-}
-
-const SUGGESTIONS_MAP: Record<string, Record<string, string>> = {
-  motion: HUBSPOT_MOTION_SUGGESTIONS,
-  market: HUBSPOT_MARKET_SUGGESTIONS,
-};
-
 export function FieldMappingTab({
   provider,
   mappings,
   sourceFields,
-  stageMappings,
-  onStageMappingsChange,
   onSave,
   saving,
 }: FieldMappingTabProps) {
   const allSourceFields = useMemo(() => flattenSourceFields(sourceFields), [sourceFields]);
+  const providerLabel = PROVIDER_LABELS[provider] ?? provider;
 
   // --- Date state ---
   const existingDateMapping = extractDateMapping(mappings);
   const [dateField, setDateField] = useState(existingDateMapping?.source_field ?? '');
 
-  // --- Dimension states (market, motion) ---
+  // --- Dimension states (funnel_stage, market, channel, motion) ---
   const [dimensionState, setDimensionState] = useState<
-    Record<string, { sourceField: string; valueMap: ValueMapEntry[] }>
+    Record<string, { sourceField: string }>
   >(() => {
-    const state: Record<string, { sourceField: string; valueMap: ValueMapEntry[] }> = {};
+    const state: Record<string, { sourceField: string }> = {};
     for (const config of DIMENSION_CONFIGS) {
       const existing = extractDimensionMapping(mappings, config.dimension);
       state[config.dimension] = {
         sourceField: existing?.source_field ?? '',
-        valueMap: extractValueMap(existing),
       };
     }
     return state;
   });
 
-  // --- Metric mappings ---
-  const [metricMappings, setMetricMappings] = useState<IntegrationFieldMapping[]>(
-    getMetricMappings(mappings)
-  );
-
   // --- Completeness checks ---
-  const hasStages = stageMappings.some((s) => s.funnel_stage !== '');
   const hasDate = !!dateField;
-  const hasMarket = !!dimensionState.market?.sourceField && dimensionState.market.valueMap.some((e) => e.target_value);
-  const hasMotion = !!dimensionState.motion?.sourceField && dimensionState.motion.valueMap.some((e) => e.target_value);
+  const hasFunnelStage = !!dimensionState.funnel_stage?.sourceField;
+  const hasMarket = !!dimensionState.market?.sourceField;
+  const hasChannel = !!dimensionState.channel?.sourceField;
+  const hasMotion = !!dimensionState.motion?.sourceField;
 
-  const dimensions = [
-    { key: 'stages', label: 'Stages', done: hasStages },
-    { key: 'date', label: 'Date', done: hasDate },
-    { key: 'market', label: 'Market', done: hasMarket },
-    { key: 'motion', label: 'Motion', done: hasMotion },
+  const sections = [
+    { key: 'date', label: 'Date', done: hasDate, required: true },
+    { key: 'funnel_stage', label: 'Funnel Stage', done: hasFunnelStage, required: true },
+    { key: 'market', label: 'Market', done: hasMarket, required: true },
+    { key: 'channel', label: 'Channel', done: hasChannel, required: true },
+    { key: 'motion', label: 'Motion', done: hasMotion, required: false },
   ];
-  const configuredCount = dimensions.filter((d) => d.done).length;
+  const requiredSections = sections.filter((s) => s.required);
+  const configuredCount = sections.filter((d) => d.done).length;
+  const requiredConfiguredCount = requiredSections.filter((d) => d.done).length;
 
   // --- Build all mappings for save ---
   const buildAllMappings = useCallback((): IntegrationFieldMapping[] => {
@@ -149,17 +121,11 @@ export function FieldMappingTab({
       });
     }
 
-    // Dimension mappings (market, motion)
+    // Dimension mappings (funnel_stage, market, channel, motion)
     for (const config of DIMENSION_CONFIGS) {
       const state = dimensionState[config.dimension];
       if (!state?.sourceField) continue;
       const existing = extractDimensionMapping(mappings, config.dimension);
-      const valueMapObj: Record<string, string> = {};
-      for (const entry of state.valueMap) {
-        if (entry.target_value) {
-          valueMapObj[entry.source_value] = entry.target_value;
-        }
-      }
       result.push({
         id: existing?.id ?? `fm-${config.dimension}-${Date.now()}`,
         integration_id: integrationId,
@@ -167,28 +133,15 @@ export function FieldMappingTab({
         source_field: state.sourceField,
         target_table: 'daily_funnel_metrics',
         target_field: config.dimension,
-        status: Object.keys(valueMapObj).length > 0 ? 'mapped' : 'suggested',
-        transform_rule: Object.keys(valueMapObj).length > 0
-          ? { type: 'value_map', value_map: valueMapObj }
-          : null,
+        status: 'mapped',
+        transform_rule: { type: 'passthrough' },
         created_at: existing?.created_at ?? now,
         updated_at: now,
       });
     }
 
-    // Stage mapping (funnel_stage) — keep existing
-    const stageMapping = mappings.find(
-      (m) => m.target_table === 'daily_funnel_metrics' && m.target_field === 'funnel_stage'
-    );
-    if (stageMapping) {
-      result.push(stageMapping);
-    }
-
-    // Metric mappings
-    result.push(...metricMappings);
-
     return result;
-  }, [dateField, dimensionState, metricMappings, mappings, existingDateMapping]);
+  }, [dateField, dimensionState, mappings, existingDateMapping]);
 
   const handleSaveAll = () => {
     onSave(buildAllMappings());
@@ -197,117 +150,108 @@ export function FieldMappingTab({
   const updateDimensionSourceField = (dimension: string, field: string) => {
     setDimensionState((prev) => ({
       ...prev,
-      [dimension]: { ...prev[dimension], sourceField: field },
-    }));
-  };
-
-  const updateDimensionValueMap = (dimension: string, entries: ValueMapEntry[]) => {
-    setDimensionState((prev) => ({
-      ...prev,
-      [dimension]: { ...prev[dimension], valueMap: entries },
+      [dimension]: { sourceField: field },
     }));
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 pb-24">
       {/* Completeness indicator */}
       <div className="space-y-2">
         <p className="text-sm font-medium">
-          {configuredCount} of {dimensions.length} required dimensions configured
+          {requiredConfiguredCount} of {requiredSections.length} required sections configured
+          {hasMotion ? ` (+1 optional)` : ''}
         </p>
         <div className="flex flex-wrap gap-3">
-          {dimensions.map((d) => (
+          {sections.map((d) => (
             <div key={d.key} className="flex items-center gap-1.5 text-xs">
               {d.done ? (
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
               ) : (
                 <Circle className="h-3.5 w-3.5 text-muted-foreground" />
               )}
-              <span className={d.done ? 'text-foreground' : 'text-muted-foreground'}>{d.label}</span>
+              <span className={d.done ? 'text-foreground' : 'text-muted-foreground'}>
+                {d.label}
+                {!d.required && ' (optional)'}
+              </span>
             </div>
           ))}
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${(configuredCount / dimensions.length) * 100}%` }}
+            style={{ width: `${(configuredCount / sections.length) * 100}%` }}
           />
         </div>
       </div>
 
-      {/* Section 1: Lifecycle Stage Mapping */}
-      {provider === 'hubspot' && stageMappings.length > 0 && (
-        <section className="space-y-3">
+      {/* Section 1: Date Field */}
+      <Card>
+        <CardContent className="p-5 space-y-3">
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className="h-6 w-6 justify-center rounded-full p-0 text-xs font-semibold">1</Badge>
-            <h3 className="text-sm font-semibold">Lifecycle Stage Mapping</h3>
-            <Badge variant={hasStages ? 'low' : 'outline'}>
-              {hasStages ? 'Configured' : 'Required'}
-            </Badge>
+            {hasDate ? (
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              </div>
+            ) : (
+              <Badge variant="outline" className="h-6 w-6 justify-center rounded-full p-0 text-xs font-semibold">1</Badge>
+            )}
+            <h3 className="text-sm font-semibold">Date Field</h3>
           </div>
-          <StageMappingTable
-            stages={stageMappings}
-            onChange={onStageMappingsChange}
-          />
-        </section>
-      )}
-
-      {/* Section 2: Date Field */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="h-6 w-6 justify-center rounded-full p-0 text-xs font-semibold">2</Badge>
-          <h3 className="text-sm font-semibold">Date Field</h3>
-        </div>
-        <p className="text-xs text-muted-foreground">Select the source date field used for daily metric aggregation.</p>
-        <DateFieldSection
-          sourceFields={allSourceFields}
-          selectedField={dateField}
-          onChange={setDateField}
-        />
-      </section>
-
-      {/* Section 3 & 4: Market & Motion Dimensions */}
-      {DIMENSION_CONFIGS.map((config, idx) => (
-        <section key={config.dimension} className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="h-6 w-6 justify-center rounded-full p-0 text-xs font-semibold">
-              {idx + 3}
-            </Badge>
-            <h3 className="text-sm font-semibold">{config.label}</h3>
-          </div>
-          <DimensionMappingSection
-            label={config.label}
-            description={config.description}
-            allowedValues={config.allowed_values}
+          <p className="text-xs text-muted-foreground">Select the source date field used for daily metric aggregation.</p>
+          <DateFieldSection
             sourceFields={allSourceFields}
-            selectedSourceField={dimensionState[config.dimension]?.sourceField ?? ''}
-            onSourceFieldChange={(field) => updateDimensionSourceField(config.dimension, field)}
-            valueMap={dimensionState[config.dimension]?.valueMap ?? []}
-            onValueMapChange={(entries) => updateDimensionValueMap(config.dimension, entries)}
-            suggestions={SUGGESTIONS_MAP[config.dimension]}
+            selectedField={dateField}
+            onChange={setDateField}
           />
-        </section>
-      ))}
+        </CardContent>
+      </Card>
 
-      {/* Section 5: Metric Fields */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="h-6 w-6 justify-center rounded-full p-0 text-xs font-semibold">5</Badge>
-          <h3 className="text-sm font-semibold">Metric Fields</h3>
+      {/* Sections 2-5: Funnel Stage, Market, Channel, Motion Dimensions */}
+      {DIMENSION_CONFIGS.map((config, idx) => {
+        const isDone = !!dimensionState[config.dimension]?.sourceField;
+        return (
+          <Card key={config.dimension}>
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center gap-3">
+                {isDone ? (
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </div>
+                ) : (
+                  <Badge variant="outline" className="h-6 w-6 justify-center rounded-full p-0 text-xs font-semibold">
+                    {idx + 2}
+                  </Badge>
+                )}
+                <h3 className="text-sm font-semibold">{config.label}</h3>
+                <Badge variant={isDone ? 'low' : 'outline'}>
+                  {isDone ? 'Mapped' : config.required ? 'Required' : 'Optional'}
+                </Badge>
+              </div>
+              <DimensionMappingSection
+                label={config.label}
+                description={config.description}
+                required={config.required}
+                sourceFields={allSourceFields}
+                selectedSourceField={dimensionState[config.dimension]?.sourceField ?? ''}
+                onSourceFieldChange={(field) => updateDimensionSourceField(config.dimension, field)}
+                providerLabel={providerLabel}
+              />
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      {/* Sticky Save All button */}
+      <div className="fixed bottom-0 left-0 right-0 z-10 border-t border-border bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
+          <span className="text-xs text-muted-foreground">
+            {configuredCount} of {sections.length} sections configured
+          </span>
+          <Button onClick={handleSaveAll} disabled={saving}>
+            {saving ? 'Saving...' : 'Save All Mappings'}
+          </Button>
         </div>
-        <p className="text-xs text-muted-foreground">Map source fields to GTM Brain numeric metrics (revenue, spend, CAC, etc.).</p>
-        <FieldMappingTable
-          mappings={metricMappings}
-          onSave={setMetricMappings}
-          targetFieldFilter={METRIC_TARGET_FIELDS}
-        />
-      </section>
-
-      {/* Save All button */}
-      <div className="flex justify-end border-t border-border pt-4">
-        <Button onClick={handleSaveAll} disabled={saving}>
-          {saving ? 'Saving...' : 'Save All Mappings'}
-        </Button>
       </div>
     </div>
   );

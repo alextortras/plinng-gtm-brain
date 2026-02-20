@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApi } from '@/hooks/use-api';
@@ -15,7 +15,7 @@ import { DisconnectDialog } from '@/components/integrations/disconnect-dialog';
 import { SyncStatusIndicator } from '@/components/integrations/sync-status-indicator';
 import { getCatalogEntry } from '@/lib/integrations/catalog';
 import type { Integration, IntegrationFieldMapping, IntegrationSync } from '@/types/database';
-import type { StageMappingRow, SourceFieldsByObject } from '@/types/integrations';
+import type { SourceFieldsByObject } from '@/types/integrations';
 import {
   ArrowLeft,
   Loader2,
@@ -65,25 +65,7 @@ export default function IntegrationDetailPage() {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [savingMappings, setSavingMappings] = useState(false);
-
-  // Mock lifecycle stage mappings for HubSpot
-  const [stageMappings, setStageMappings] = useState<StageMappingRow[]>([]);
-
-  useEffect(() => {
-    if (provider === 'hubspot' && integration?.status === 'connected') {
-      // Initialize lifecycle stage mappings with demo data
-      setStageMappings([
-        { source_stage_id: 'subscriber', source_stage_label: 'Subscriber', funnel_stage: 'lead' },
-        { source_stage_id: 'lead', source_stage_label: 'Lead', funnel_stage: 'lead' },
-        { source_stage_id: 'marketingqualifiedlead', source_stage_label: 'Marketing Qualified Lead', funnel_stage: 'sql' },
-        { source_stage_id: 'salesqualifiedlead', source_stage_label: 'Sales Qualified Lead', funnel_stage: 'sql' },
-        { source_stage_id: 'opportunity', source_stage_label: 'Opportunity', funnel_stage: 'sal' },
-        { source_stage_id: 'customer', source_stage_label: 'Customer', funnel_stage: 'win' },
-        { source_stage_id: 'evangelist', source_stage_label: 'Evangelist', funnel_stage: 'win' },
-        { source_stage_id: 'other', source_stage_label: 'Other', funnel_stage: '' },
-      ]);
-    }
-  }, [provider, integration?.status]);
+  const [saveResult, setSaveResult] = useState<{ success: boolean; message: string } | null>(null);
 
   if (!catalog) {
     return (
@@ -184,6 +166,7 @@ export default function IntegrationDetailPage() {
 
   const handleSaveMappings = async (updated: IntegrationFieldMapping[]) => {
     setSavingMappings(true);
+    setSaveResult(null);
     try {
       const res = await fetch(`/api/integrations/${provider}/mappings`, {
         method: 'PUT',
@@ -197,8 +180,9 @@ export default function IntegrationDetailPage() {
       }
 
       refetchMappings();
+      setSaveResult({ success: true, message: 'Field mappings saved successfully.' });
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to save');
+      setSaveResult({ success: false, message: e instanceof Error ? e.message : 'Failed to save mappings.' });
     } finally {
       setSavingMappings(false);
     }
@@ -363,15 +347,29 @@ export default function IntegrationDetailPage() {
 
           {/* Field Mapping tab */}
           {activeTab === 'field-mapping' && (
-            <FieldMappingTab
-              provider={provider}
-              mappings={mappings ?? []}
-              sourceFields={sourceFields ?? {}}
-              stageMappings={stageMappings}
-              onStageMappingsChange={setStageMappings}
-              onSave={handleSaveMappings}
-              saving={savingMappings}
-            />
+            <>
+              {saveResult && (
+                <div className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
+                  saveResult.success
+                    ? 'bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-200'
+                    : 'bg-destructive/5 text-destructive'
+                }`}>
+                  {saveResult.success ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    <XCircle className="h-4 w-4" />
+                  )}
+                  {saveResult.message}
+                </div>
+              )}
+              <FieldMappingTab
+                provider={provider}
+                mappings={mappings ?? []}
+                sourceFields={sourceFields ?? {}}
+                onSave={handleSaveMappings}
+                saving={savingMappings}
+              />
+            </>
           )}
 
           {/* Sync History tab */}

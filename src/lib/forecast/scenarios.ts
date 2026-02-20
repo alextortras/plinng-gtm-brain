@@ -3,21 +3,20 @@ import {
   parseKey,
   aggregatePipeline,
 } from './conversion-rates';
-import { getRevenueType, FORECASTABLE_STAGES } from './revenue-types';
 import {
   DailyFunnelMetric,
   AccountScore,
   ForecastScenario,
   RevenueType,
-  SalesMotion,
-  Market,
 } from '@/types/database';
 
 export interface ForecastSegment {
   scenario: ForecastScenario;
   revenue_type: RevenueType;
-  motion: SalesMotion;
-  market: Market;
+  funnel_stage: string;
+  motion: string;
+  market: string;
+  channel: string | null;
   projected_revenue: number;
   conversion_rate_used: number;
   pipeline_included: number;
@@ -38,13 +37,7 @@ function generateScenarioSegments(
   const segments: ForecastSegment[] = [];
 
   for (const [key, stats] of Object.entries(conversionRates)) {
-    const { stage, motion, market } = parseKey(key);
-
-    // Only forecast from revenue-producing stages
-    if (!FORECASTABLE_STAGES.includes(stage)) continue;
-
-    const revenueType = getRevenueType(stage);
-    if (!revenueType) continue;
+    const { stage, motion, market, channel } = parseKey(key);
 
     const pipelineData = pipeline.get(key);
     if (!pipelineData) continue;
@@ -77,10 +70,8 @@ function generateScenarioSegments(
     // Calculate projected revenue
     let projectedRevenue = pipelineData.totalPipeline * convRate * pipelineMultiplier;
 
-    // For renewals, apply GRR adjustment
-    if (revenueType === 'renewals') {
-      projectedRevenue *= avgGrr;
-    }
+    // Apply GRR adjustment as a general factor
+    projectedRevenue *= avgGrr;
 
     // Project forward 90 days based on daily run rate
     const dailyRate = projectedRevenue / Math.max(pipelineData.days, 1);
@@ -88,9 +79,11 @@ function generateScenarioSegments(
 
     segments.push({
       scenario,
-      revenue_type: revenueType,
+      revenue_type: 'new_business',
+      funnel_stage: stage,
       motion,
       market,
+      channel,
       projected_revenue: Math.round(projected90Day * 100) / 100,
       conversion_rate_used: Math.round(convRate * 10000) / 10000,
       pipeline_included: Math.round(pipelineData.totalPipeline * pipelineMultiplier * 100) / 100,

@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
-import { RevenueForecast, RevenueType, SalesMotion } from '@/types/database';
+import { RevenueForecast } from '@/types/database';
 
 export interface ForecastFilters {
-  revenueType?: RevenueType;
-  motion?: SalesMotion;
+  funnelStage?: string;
+  motion?: string;
+  channel?: string;
   generatedAt?: string;
   limit?: number;
 }
@@ -21,11 +22,14 @@ export async function getForecasts(
     .select('*')
     .order('generated_at', { ascending: false });
 
-  if (filters.revenueType) {
-    query = query.eq('revenue_type', filters.revenueType);
+  if (filters.funnelStage) {
+    query = query.eq('funnel_stage', filters.funnelStage);
   }
   if (filters.motion) {
     query = query.eq('motion', filters.motion);
+  }
+  if (filters.channel) {
+    query = query.eq('channel', filters.channel);
   }
   if (filters.generatedAt) {
     query = query.eq('generated_at', filters.generatedAt);

@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
-import { DailyFunnelMetric, FunnelStage, Market, SalesMotion } from '@/types/database';
+import { DailyFunnelMetric } from '@/types/database';
 
 export interface FunnelMetricsFilters {
-  market?: Market;
-  motion?: SalesMotion;
-  stage?: FunnelStage;
+  market?: string;
+  motion?: string;
+  channel?: string;
+  stage?: string;
   from?: string;
   to?: string;
   limit?: number;
@@ -25,6 +26,9 @@ export async function getFunnelMetrics(
   }
   if (filters.motion) {
     query = query.eq('motion', filters.motion);
+  }
+  if (filters.channel) {
+    query = query.eq('channel', filters.channel);
   }
   if (filters.stage) {
     query = query.eq('funnel_stage', filters.stage);

@@ -68,23 +68,18 @@ export interface SourceFieldOption {
   name: string;
   label: string;
   type: string; // 'enumeration' | 'date' | 'number' | 'string' etc.
+  options?: { value: string; label: string }[];
 }
 
 export type SourceFieldsByObject = Record<string, SourceFieldOption[]>;
 
-// --- Dimension / Value Mapping ---
-
-export interface ValueMapEntry {
-  source_value: string;
-  target_value: string;
-}
+// --- Dimension Mapping ---
 
 export interface DimensionMappingConfig {
-  dimension: string;         // 'market' | 'motion'
+  dimension: string;         // 'market' | 'channel' | 'motion'
   label: string;
   description: string;
-  allowed_values: { value: string; label: string }[];
-  suggested_source_field?: string;
+  required: boolean;
 }
 
 // --- HubSpot-specific ---
@@ -108,10 +103,3 @@ export interface SyncHistoryEntry {
   duration_ms: number | null;
 }
 
-// --- Stage Mapping ---
-
-export interface StageMappingRow {
-  source_stage_id: string;
-  source_stage_label: string;
-  funnel_stage: string;
-}

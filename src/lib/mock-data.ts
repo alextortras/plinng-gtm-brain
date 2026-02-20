@@ -13,9 +13,6 @@ import type {
   Integration,
   IntegrationFieldMapping,
   IntegrationSync,
-  FunnelStage,
-  SalesMotion,
-  Market,
   ForecastScenario,
   RevenueType,
   ScoreType,
@@ -45,20 +42,32 @@ function rngInt(rng: () => number, min: number, max: number): number {
   return Math.floor(rngRange(rng, min, max + 1));
 }
 
+/** Combine a base seed with optional filter strings so different filter combos produce different data */
+function hashFilters(base: number, ...filters: (string | undefined)[]): number {
+  let h = base;
+  for (const f of filters) {
+    if (!f) continue;
+    for (let i = 0; i < f.length; i++) {
+      h = (h * 31 + f.charCodeAt(i)) | 0;
+    }
+  }
+  return h;
+}
+
 // --- Constants ---
 
-const STAGES: FunnelStage[] = [
+const STAGES: string[] = [
   'awareness', 'education', 'selection', 'commit',
   'onboarding', 'impact', 'growth', 'advocacy',
 ];
 
-const MOTIONS: SalesMotion[] = ['outbound', 'partners', 'paid_ads', 'organic', 'plg'];
+const MOTIONS: string[] = ['outbound', 'partners', 'paid_ads', 'organic', 'plg'];
 
-const MARKETS: Market[] = ['us', 'spain'];
+const MARKETS: string[] = ['us', 'spain'];
+
+const CHANNELS: string[] = ['organic_search', 'paid_search', 'paid_social', 'referral', 'direct', 'email'];
 
 const SCENARIOS: ForecastScenario[] = ['best_case', 'commit', 'most_likely'];
-
-const REVENUE_TYPES: RevenueType[] = ['new_business', 'expansion', 'renewals'];
 
 // --- Rep Names (matches seed.sql UUIDs) ---
 
@@ -115,23 +124,30 @@ function generateFunnelMetrics(): DailyFunnelMetric[] {
   const rows: DailyFunnelMetric[] = [];
   let idCounter = 1;
 
-  const stageFactors: Record<FunnelStage, number> = {
+  const stageFactors: Record<string, number> = {
     awareness: 1.0, education: 0.7, selection: 0.45, commit: 0.25,
     onboarding: 0.2, impact: 0.18, growth: 0.1, advocacy: 0.05,
   };
-  const motionFactors: Record<SalesMotion, number> = {
+  const motionFactors: Record<string, number> = {
     paid_ads: 1.2, outbound: 1.0, organic: 0.8, partners: 0.6, plg: 0.5,
   };
-  const marketFactors: Record<Market, number> = { us: 1.0, spain: 0.65 };
-  const stageConvBase: Record<FunnelStage, [number, number]> = {
+  const marketFactors: Record<string, number> = { us: 1.0, spain: 0.65 };
+  const stageConvBase: Record<string, [number, number]> = {
     awareness: [0.65, 0.10], education: [0.60, 0.10], selection: [0.50, 0.10],
     commit: [0.45, 0.15], onboarding: [0.80, 0.15], impact: [0.75, 0.15],
     growth: [0.30, 0.15], advocacy: [0.20, 0.10],
   };
-  const spendPerLead: Record<SalesMotion, [number, number]> = {
+  const spendPerLead: Record<string, [number, number]> = {
     paid_ads: [25, 20], outbound: [10, 10], partners: [5, 8], organic: [2, 3], plg: [1.5, 2.5],
   };
-  const pipelineMultiplier: Record<FunnelStage, number> = {
+  const channelForMotion: Record<string, string[]> = {
+    paid_ads: ['paid_search', 'paid_social'],
+    outbound: ['email', 'direct'],
+    organic: ['organic_search', 'direct'],
+    partners: ['referral'],
+    plg: ['organic_search', 'direct'],
+  };
+  const pipelineMultiplier: Record<string, number> = {
     awareness: 3.0, education: 2.5, selection: 2.0, commit: 1.5,
     onboarding: 1.0, impact: 0.8, growth: 1.2, advocacy: 0.5,
   };
@@ -142,6 +158,10 @@ function generateFunnelMetrics(): DailyFunnelMetric[] {
     for (const stage of STAGES) {
       for (const motion of MOTIONS) {
         for (const market of MARKETS) {
+          // Pick a channel based on the motion
+          const possibleChannels = channelForMotion[motion] ?? ['direct'];
+          const channel = possibleChannels[Math.floor(rng() * possibleChannels.length)];
+
           const noise = 0.8 + rng() * 0.4;
           const baseleads = 50;
           const leads = Math.max(1, Math.round(
@@ -165,6 +185,7 @@ function generateFunnelMetrics(): DailyFunnelMetric[] {
             funnel_stage: stage,
             motion,
             market,
+            channel,
             leads_count: leads,
             conversion_rate: conv,
             revenue: rev,
@@ -307,17 +328,16 @@ function generateForecasts(): RevenueForecast[] {
     most_likely: 0.82,
   };
 
-  const revenueTypeBase: Record<RevenueType, number> = {
-    new_business: 18000,
-    expansion: 8500,
-    renewals: 12000,
+  const stageBase: Record<string, number> = {
+    awareness: 2000, education: 3000, selection: 5000, commit: 8000,
+    onboarding: 4000, impact: 6000, growth: 4500, advocacy: 1500,
   };
 
-  const motionWeight: Record<SalesMotion, number> = {
+  const motionWeight: Record<string, number> = {
     paid_ads: 0.30, outbound: 0.25, organic: 0.20, partners: 0.15, plg: 0.10,
   };
 
-  const marketWeight: Record<Market, number> = { us: 0.60, spain: 0.40 };
+  const marketWeight: Record<string, number> = { us: 0.60, spain: 0.40 };
 
   // Deal explanations (attached to the first forecast row)
   const dealExplanations = [
@@ -332,10 +352,10 @@ function generateForecasts(): RevenueForecast[] {
   let isFirst = true;
 
   for (const scenario of SCENARIOS) {
-    for (const rt of REVENUE_TYPES) {
+    for (const stage of STAGES) {
       for (const motion of MOTIONS) {
         for (const market of MARKETS) {
-          const base = revenueTypeBase[rt] * motionWeight[motion] * marketWeight[market];
+          const base = (stageBase[stage] ?? 3000) * motionWeight[motion] * marketWeight[market];
           const noise = rngRange(rng, 0.85, 1.15);
           const projected = +(base * scenarioMultiplier[scenario] * noise).toFixed(2);
           const convRate = +(rngRange(rng, 0.15, 0.45)).toFixed(4);
@@ -346,9 +366,11 @@ function generateForecasts(): RevenueForecast[] {
             id: `mock-fc-${idCounter++}`,
             generated_at: isoNow(),
             scenario,
-            revenue_type: rt,
+            revenue_type: 'new_business' as RevenueType,
+            funnel_stage: stage,
             motion,
             market,
+            channel: CHANNELS[idCounter % CHANNELS.length],
             projected_revenue: projected,
             conversion_rate_used: convRate,
             pipeline_included: pipeline,
@@ -566,7 +588,7 @@ const MOCK_FIELD_MAPPINGS: IntegrationFieldMapping[] = [
     target_table: 'daily_funnel_metrics',
     target_field: 'funnel_stage',
     status: 'mapped',
-    transform_rule: { type: 'value_map', value_map: { subscriber: 'lead', lead: 'lead', marketingqualifiedlead: 'sql', salesqualifiedlead: 'sql', opportunity: 'sal', customer: 'win', evangelist: 'win' } },
+    transform_rule: { type: 'passthrough' },
     created_at: isoNow(),
     updated_at: isoNow(),
   },
@@ -600,9 +622,9 @@ const MOCK_FIELD_MAPPINGS: IntegrationFieldMapping[] = [
     source_object: 'deals',
     source_field: 'hs_analytics_source',
     target_table: 'daily_funnel_metrics',
-    target_field: 'motion',
+    target_field: 'channel',
     status: 'mapped',
-    transform_rule: { type: 'value_map', value_map: { ORGANIC_SEARCH: 'organic', ORGANIC_SOCIAL: 'organic', PAID_SEARCH: 'paid_ads', PAID_SOCIAL: 'paid_ads', DIRECT_TRAFFIC: 'organic', REFERRALS: 'partners', OFFLINE_SOURCES: 'outbound', EMAIL_MARKETING: 'outbound', OTHER_CAMPAIGNS: 'outbound' } },
+    transform_rule: { type: 'passthrough' },
     created_at: isoNow(),
     updated_at: isoNow(),
   },
@@ -626,7 +648,19 @@ const MOCK_FIELD_MAPPINGS: IntegrationFieldMapping[] = [
     target_table: 'daily_funnel_metrics',
     target_field: 'market',
     status: 'mapped',
-    transform_rule: { type: 'value_map', value_map: { 'United States': 'us', US: 'us', Spain: 'spain', 'España': 'spain' } },
+    transform_rule: { type: 'passthrough' },
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  },
+  {
+    id: 'mock-fm-map-motion',
+    integration_id: 'mock-int-hubspot',
+    source_object: 'deals',
+    source_field: 'gtm_motion',
+    target_table: 'daily_funnel_metrics',
+    target_field: 'motion',
+    status: 'mapped',
+    transform_rule: { type: 'passthrough' },
     created_at: isoNow(),
     updated_at: isoNow(),
   },
@@ -638,7 +672,7 @@ const MOCK_FIELD_MAPPINGS: IntegrationFieldMapping[] = [
     target_table: 'daily_funnel_metrics',
     target_field: 'funnel_stage',
     status: 'mapped',
-    transform_rule: null,
+    transform_rule: { type: 'passthrough' },
     created_at: isoNow(),
     updated_at: isoNow(),
   },
@@ -749,11 +783,13 @@ const MOCK_REGISTRY: Record<string, MockResolver> = {
     let data = generateFunnelMetrics();
     const market = params.get('market');
     const motion = params.get('motion');
+    const channel = params.get('channel');
     const stage = params.get('stage');
     const from = params.get('from');
     const to = params.get('to');
     if (market) data = data.filter((m) => m.market === market);
     if (motion) data = data.filter((m) => m.motion === motion);
+    if (channel) data = data.filter((m) => m.channel === channel);
     if (stage) data = data.filter((m) => m.funnel_stage === stage);
     if (from) data = data.filter((m) => m.date >= from);
     if (to) data = data.filter((m) => m.date <= to);
@@ -768,8 +804,18 @@ const MOCK_REGISTRY: Record<string, MockResolver> = {
     return data;
   },
 
-  '/api/forecasts': () => {
-    return generateForecasts();
+  '/api/forecasts': (url) => {
+    const params = parseParams(url);
+    let data = generateForecasts();
+    const motion = params.get('motion');
+    const funnelStage = params.get('funnelStage');
+    const channel = params.get('channel');
+    const limit = params.get('limit');
+    if (motion) data = data.filter((f) => f.motion === motion);
+    if (funnelStage) data = data.filter((f) => f.funnel_stage === funnelStage);
+    if (channel) data = data.filter((f) => f.channel === channel);
+    if (limit) data = data.slice(0, parseInt(limit, 10));
+    return data;
   },
 
   '/api/strategy-config': () => {
@@ -827,23 +873,77 @@ const MOCK_REGISTRY: Record<string, MockResolver> = {
   '/api/integrations/hubspot/fields': () => {
     return {
       deals: [
-        { name: 'dealstage', label: 'Deal Stage', type: 'enumeration' },
-        { name: 'lifecyclestage', label: 'Lifecycle Stage', type: 'enumeration' },
+        { name: 'dealstage', label: 'Deal Stage', type: 'enumeration', options: [
+          { value: 'appointmentscheduled', label: 'Appointment Scheduled' },
+          { value: 'qualifiedtobuy', label: 'Qualified To Buy' },
+          { value: 'presentationscheduled', label: 'Presentation Scheduled' },
+          { value: 'decisionmakerboughtin', label: 'Decision Maker Bought-In' },
+          { value: 'contractsent', label: 'Contract Sent' },
+          { value: 'closedwon', label: 'Closed Won' },
+          { value: 'closedlost', label: 'Closed Lost' },
+        ] },
+        { name: 'lifecyclestage', label: 'Lifecycle Stage', type: 'enumeration', options: [
+          { value: 'subscriber', label: 'Subscriber' },
+          { value: 'lead', label: 'Lead' },
+          { value: 'marketingqualifiedlead', label: 'Marketing Qualified Lead' },
+          { value: 'salesqualifiedlead', label: 'Sales Qualified Lead' },
+          { value: 'opportunity', label: 'Opportunity' },
+          { value: 'customer', label: 'Customer' },
+          { value: 'evangelist', label: 'Evangelist' },
+        ] },
         { name: 'amount', label: 'Amount', type: 'number' },
-        { name: 'pipeline', label: 'Pipeline', type: 'enumeration' },
+        { name: 'pipeline', label: 'Pipeline', type: 'enumeration', options: [
+          { value: 'default', label: 'Sales Pipeline' },
+          { value: 'partnerships', label: 'Partnerships Pipeline' },
+        ] },
         { name: 'closedate', label: 'Close Date', type: 'date' },
-        { name: 'hs_analytics_source', label: 'Original Source', type: 'enumeration' },
-        { name: 'hs_country', label: 'Country', type: 'enumeration' },
+        { name: 'hs_analytics_source', label: 'Original Source', type: 'enumeration', options: [
+          { value: 'ORGANIC_SEARCH', label: 'Organic Search' },
+          { value: 'ORGANIC_SOCIAL', label: 'Organic Social' },
+          { value: 'PAID_SEARCH', label: 'Paid Search' },
+          { value: 'PAID_SOCIAL', label: 'Paid Social' },
+          { value: 'DIRECT_TRAFFIC', label: 'Direct Traffic' },
+          { value: 'REFERRALS', label: 'Referrals' },
+          { value: 'OFFLINE_SOURCES', label: 'Offline Sources' },
+          { value: 'EMAIL_MARKETING', label: 'Email Marketing' },
+          { value: 'OTHER_CAMPAIGNS', label: 'Other Campaigns' },
+        ] },
+        { name: 'hs_country', label: 'Country', type: 'enumeration', options: [
+          { value: 'United States', label: 'United States' },
+          { value: 'Spain', label: 'Spain' },
+          { value: 'United Kingdom', label: 'United Kingdom' },
+          { value: 'Germany', label: 'Germany' },
+        ] },
         { name: 'createdate', label: 'Create Date', type: 'date' },
         { name: 'dealname', label: 'Deal Name', type: 'string' },
         { name: 'hs_deal_stage_probability', label: 'Deal Probability', type: 'number' },
+        { name: 'gtm_motion', label: 'GTM Motion', type: 'enumeration', options: [
+          { value: 'slg', label: 'Sales-Led Growth' },
+          { value: 'plg', label: 'Product-Led Growth' },
+        ] },
       ],
       contacts: [
-        { name: 'lifecyclestage', label: 'Lifecycle Stage', type: 'enumeration' },
+        { name: 'lifecyclestage', label: 'Lifecycle Stage', type: 'enumeration', options: [
+          { value: 'subscriber', label: 'Subscriber' },
+          { value: 'lead', label: 'Lead' },
+          { value: 'marketingqualifiedlead', label: 'Marketing Qualified Lead' },
+          { value: 'salesqualifiedlead', label: 'Sales Qualified Lead' },
+          { value: 'opportunity', label: 'Opportunity' },
+          { value: 'customer', label: 'Customer' },
+          { value: 'evangelist', label: 'Evangelist' },
+        ] },
         { name: 'num_associated_deals', label: 'Associated Deals', type: 'number' },
         { name: 'email', label: 'Email', type: 'string' },
         { name: 'company', label: 'Company', type: 'string' },
-        { name: 'hs_analytics_source', label: 'Original Source', type: 'enumeration' },
+        { name: 'hs_analytics_source', label: 'Original Source', type: 'enumeration', options: [
+          { value: 'ORGANIC_SEARCH', label: 'Organic Search' },
+          { value: 'ORGANIC_SOCIAL', label: 'Organic Social' },
+          { value: 'PAID_SEARCH', label: 'Paid Search' },
+          { value: 'PAID_SOCIAL', label: 'Paid Social' },
+          { value: 'DIRECT_TRAFFIC', label: 'Direct Traffic' },
+          { value: 'REFERRALS', label: 'Referrals' },
+          { value: 'EMAIL_MARKETING', label: 'Email Marketing' },
+        ] },
       ],
     };
   },
@@ -967,8 +1067,10 @@ export function generatePhaseTableData(
   from?: string,
   to?: string,
   seed: number = 42,
+  market?: string,
+  channel?: string,
 ): PhaseTableData {
-  const rng = createRng(seed);
+  const rng = createRng(hashFilters(seed, market, channel));
   const columns = generatePeriodColumns(period, from, to);
   const values: Record<string, Record<string, number>> = {};
 
@@ -1120,6 +1222,8 @@ export function generateAcquisitionKpis(
   isPaid: boolean,
   from?: string,
   to?: string,
+  market?: string,
+  channel?: string,
 ): AcquisitionKpis {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -1130,8 +1234,8 @@ export function generateAcquisitionKpis(
   const periodFrom = hasDateFilter ? (from || lastMonthStart) : thisMonthStart;
   const periodTo = hasDateFilter ? (to || now.toISOString().slice(0, 10)) : now.toISOString().slice(0, 10);
 
-  const thisData = generatePhaseTableData(config, 'monthly', phase, periodFrom, periodTo, 42);
-  const lastData = generatePhaseTableData(config, 'monthly', phase, lastMonthStart, lastMonthEnd, 99);
+  const thisData = generatePhaseTableData(config, 'monthly', phase, periodFrom, periodTo, 42, market, channel);
+  const lastData = generatePhaseTableData(config, 'monthly', phase, lastMonthStart, lastMonthEnd, 99, market, channel);
 
   const sumKey = (data: PhaseTableData, key: string) => {
     return data.columns.reduce((s, col) => s + (data.values[key]?.[col] ?? 0), 0);
@@ -1222,6 +1326,8 @@ export function generateRetentionKpis(
   config: FunnelConfig,
   from?: string,
   to?: string,
+  market?: string,
+  channel?: string,
 ): RetentionKpis {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -1232,8 +1338,8 @@ export function generateRetentionKpis(
   const periodFrom = hasDateFilter ? (from || lastMonthStart) : thisMonthStart;
   const periodTo = hasDateFilter ? (to || now.toISOString().slice(0, 10)) : now.toISOString().slice(0, 10);
 
-  const thisData = generatePhaseTableData(config, 'monthly', 'retention', periodFrom, periodTo, 42);
-  const lastData = generatePhaseTableData(config, 'monthly', 'retention', lastMonthStart, lastMonthEnd, 99);
+  const thisData = generatePhaseTableData(config, 'monthly', 'retention', periodFrom, periodTo, 42, market, channel);
+  const lastData = generatePhaseTableData(config, 'monthly', 'retention', lastMonthStart, lastMonthEnd, 99, market, channel);
 
   const avgKey = (data: PhaseTableData, key: string) => {
     const vals = data.columns.map((col) => data.values[key]?.[col] ?? 0).filter((v) => v !== 0);
@@ -1276,6 +1382,8 @@ export function generateExpansionKpis(
   config: FunnelConfig,
   from?: string,
   to?: string,
+  market?: string,
+  channel?: string,
 ): ExpansionKpis {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -1286,8 +1394,8 @@ export function generateExpansionKpis(
   const periodFrom = hasDateFilter ? (from || lastMonthStart) : thisMonthStart;
   const periodTo = hasDateFilter ? (to || now.toISOString().slice(0, 10)) : now.toISOString().slice(0, 10);
 
-  const thisData = generatePhaseTableData(config, 'monthly', 'expansion', periodFrom, periodTo, 42);
-  const lastData = generatePhaseTableData(config, 'monthly', 'expansion', lastMonthStart, lastMonthEnd, 99);
+  const thisData = generatePhaseTableData(config, 'monthly', 'expansion', periodFrom, periodTo, 42, market, channel);
+  const lastData = generatePhaseTableData(config, 'monthly', 'expansion', lastMonthStart, lastMonthEnd, 99, market, channel);
 
   const sumKey = (data: PhaseTableData, key: string) => {
     return data.columns.reduce((s, col) => s + (data.values[key]?.[col] ?? 0), 0);

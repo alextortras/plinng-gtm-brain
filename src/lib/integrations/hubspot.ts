@@ -140,6 +140,7 @@ interface HubSpotPropertiesResponse {
     type: string;
     fieldType: string;
     groupName: string;
+    options?: { label: string; value: string }[];
   }[];
 }
 

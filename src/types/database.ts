@@ -5,24 +5,11 @@
 
 // --- Enums ---
 
-export type FunnelStage =
-  | 'awareness'
-  | 'education'
-  | 'selection'
-  | 'commit'
-  | 'onboarding'
-  | 'impact'
-  | 'growth'
-  | 'advocacy';
-
-export type SalesMotion =
-  | 'outbound'
-  | 'partners'
-  | 'paid_ads'
-  | 'organic'
-  | 'plg';
-
-export type Market = 'us' | 'spain';
+// Dynamic — values come from integration field mapping
+export type FunnelStage = string;
+export type SalesMotion = string;
+export type Market = string;
+export type Channel = string;
 
 export type StrategyMode =
   | 'maximize_revenue'
@@ -61,6 +48,7 @@ export interface DailyFunnelMetric {
   funnel_stage: FunnelStage;
   motion: SalesMotion;
   market: Market;
+  channel: Channel | null;
   leads_count: number;
   conversion_rate: number;
   revenue: number;
@@ -128,8 +116,10 @@ export interface RevenueForecast {
   generated_at: string;
   scenario: ForecastScenario;
   revenue_type: RevenueType;
+  funnel_stage: string;
   motion: SalesMotion;
   market: Market;
+  channel: Channel | null;
   projected_revenue: number;
   conversion_rate_used: number;
   pipeline_included: number;
@@ -279,9 +269,6 @@ export interface Database {
       };
     };
     Enums: {
-      funnel_stage: FunnelStage;
-      sales_motion: SalesMotion;
-      market: Market;
       strategy_mode: StrategyMode;
       score_type: ScoreType;
       rep_role: RepRole;

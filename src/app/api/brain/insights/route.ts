@@ -13,8 +13,6 @@ import {
   summarizeRepKpis,
   buildDataContext,
 } from '@/lib/brain/data-summarizer';
-import { Market, SalesMotion, FunnelStage } from '@/types/database';
-
 export async function POST(request: NextRequest) {
   try {
     await getAuthenticatedUser();
@@ -29,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Parse optional filters from request body
-  let filters: { market?: Market; motion?: SalesMotion; stage?: FunnelStage } = {};
+  let filters: { market?: string; motion?: string; channel?: string; stage?: string } = {};
   try {
     const body = await request.json();
     filters = body ?? {};
@@ -57,8 +55,14 @@ export async function POST(request: NextRequest) {
     const repSummary = summarizeRepKpis(repKpis);
     const dataContext = buildDataContext(funnelSummary, scoreSummary, repSummary);
 
-    // Build strategy-aware system prompt
-    const systemPrompt = buildSystemPrompt(strategyConfig);
+    // Extract dynamic dimension values from the data
+    const stages = [...new Set(funnelMetrics.map((m) => m.funnel_stage).filter(Boolean))];
+    const markets = [...new Set(funnelMetrics.map((m) => m.market).filter(Boolean))];
+    const channels = [...new Set(funnelMetrics.map((m) => m.channel).filter((c): c is string => !!c))];
+    const motions = [...new Set(funnelMetrics.map((m) => m.motion).filter(Boolean))];
+
+    // Build strategy-aware system prompt with dynamic dimensions
+    const systemPrompt = buildSystemPrompt(strategyConfig, { stages, markets, channels, motions });
 
     // Stream the response
     const result = streamText({

@@ -7,9 +7,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
-import { RevenueForecast, ForecastScenario, RevenueType } from '@/types/database';
+import { RevenueForecast, ForecastScenario } from '@/types/database';
 import { TrendingUp, Loader2 } from 'lucide-react';
 import { isDemoMode } from '@/lib/mock-data';
+import { useDimensionOptions } from '@/hooks/use-dimension-options';
 import {
   BarChart,
   Bar,
@@ -21,27 +22,6 @@ import {
   Legend,
 } from 'recharts';
 
-const MOTION_OPTIONS = [
-  { value: '', label: 'All Motions' },
-  { value: 'outbound', label: 'Outbound' },
-  { value: 'partners', label: 'Partners' },
-  { value: 'paid_ads', label: 'Paid Ads' },
-  { value: 'organic', label: 'Organic' },
-  { value: 'plg', label: 'PLG' },
-];
-
-const SCENARIO_LABELS: Record<ForecastScenario, string> = {
-  best_case: 'Best Case',
-  commit: 'Commit',
-  most_likely: 'Most Likely',
-};
-
-const REVENUE_TYPE_LABELS: Record<RevenueType, string> = {
-  new_business: 'New Business',
-  expansion: 'Expansion',
-  renewals: 'Renewals',
-};
-
 function formatCurrency(val: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -51,7 +31,14 @@ function formatCurrency(val: number): string {
   }).format(val);
 }
 
+function formatStageLabel(stage: string): string {
+  return stage
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function ForecastsPage() {
+  const { motionOptions } = useDimensionOptions();
   const [motion, setMotion] = useState('');
   const [generating, setGenerating] = useState(false);
 
@@ -101,18 +88,20 @@ export default function ForecastsPage() {
     return totals;
   }, [forecasts]);
 
-  // Chart data: revenue type breakdown per scenario
+  // Chart data: funnel stage breakdown per scenario
   const chartData = useMemo(() => {
     if (!forecasts) return [];
-    const revenueTypes: RevenueType[] = ['new_business', 'expansion', 'renewals'];
 
-    return revenueTypes.map((rt) => {
+    // Extract distinct funnel stages
+    const stages = [...new Set(forecasts.map((f) => f.funnel_stage))].sort();
+
+    return stages.map((stage) => {
       const row: Record<string, string | number> = {
-        name: REVENUE_TYPE_LABELS[rt],
+        name: formatStageLabel(stage),
       };
       for (const scenario of ['best_case', 'commit', 'most_likely'] as ForecastScenario[]) {
         const total = forecasts
-          .filter((f) => f.revenue_type === rt && f.scenario === scenario)
+          .filter((f) => f.funnel_stage === stage && f.scenario === scenario)
           .reduce((s, f) => s + Number(f.projected_revenue), 0);
         row[scenario] = Math.round(total);
       }
@@ -136,12 +125,16 @@ export default function ForecastsPage() {
     <div className="space-y-6">
       {/* Controls */}
       <div className="flex items-center justify-between">
-        <Select
-          options={MOTION_OPTIONS}
-          value={motion}
-          onChange={(e) => setMotion(e.target.value)}
-          className="w-48"
-        />
+        <div className="flex gap-3">
+          {motionOptions.length > 1 && (
+            <Select
+              options={motionOptions}
+              value={motion}
+              onChange={(e) => setMotion(e.target.value)}
+              className="w-48"
+            />
+          )}
+        </div>
         <Button onClick={handleGenerate} disabled={generating}>
           {generating ? (
             <>
@@ -193,7 +186,7 @@ export default function ForecastsPage() {
       {/* Scenario Comparison Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Revenue Forecast by Type</CardTitle>
+          <CardTitle className="text-lg">Revenue Forecast by Funnel Stage</CardTitle>
         </CardHeader>
         <CardContent>
           {loading || chartData.length === 0 ? (
@@ -224,7 +217,7 @@ export default function ForecastsPage() {
         </CardContent>
       </Card>
 
-      {/* Revenue Type Breakdown Table */}
+      {/* Funnel Stage Breakdown Table */}
       {forecasts && forecasts.length > 0 && (
         <Card>
           <CardHeader>
@@ -234,7 +227,7 @@ export default function ForecastsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="pb-3 font-medium">Revenue Type</th>
+                  <th className="pb-3 font-medium">Funnel Stage</th>
                   <th className="pb-3 font-medium">Motion</th>
                   <th className="pb-3 font-medium">Market</th>
                   <th className="pb-3 text-right font-medium">Best Case</th>
@@ -244,20 +237,20 @@ export default function ForecastsPage() {
               </thead>
               <tbody>
                 {(() => {
-                  // Group by revenue_type + motion + market
+                  // Group by funnel_stage + motion + market
                   const groups = new Map<string, Record<string, number>>();
                   for (const f of forecasts) {
-                    const key = `${f.revenue_type}|${f.motion}|${f.market}`;
+                    const key = `${f.funnel_stage}|${f.motion}|${f.market}`;
                     const group = groups.get(key) ?? {};
                     group[f.scenario] = (group[f.scenario] ?? 0) + Number(f.projected_revenue);
                     groups.set(key, group);
                   }
 
                   return Array.from(groups.entries()).map(([key, scenarios]) => {
-                    const [rt, mot, mkt] = key.split('|');
+                    const [stage, mot, mkt] = key.split('|');
                     return (
                       <tr key={key} className="border-b border-border/50">
-                        <td className="py-3">{REVENUE_TYPE_LABELS[rt as RevenueType] ?? rt}</td>
+                        <td className="py-3">{formatStageLabel(stage)}</td>
                         <td className="py-3 capitalize">{mot.replace('_', ' ')}</td>
                         <td className="py-3 uppercase">{mkt}</td>
                         <td className="py-3 text-right">{formatCurrency(scenarios.best_case ?? 0)}</td>

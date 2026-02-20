@@ -58,11 +58,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
             name: p.name,
             label: p.label,
             type: p.type,
+            ...(p.type === 'enumeration' && p.options ? { options: p.options } : {}),
           })),
           contacts: contactProps.map((p) => ({
             name: p.name,
             label: p.label,
             type: p.type,
+            ...(p.type === 'enumeration' && p.options ? { options: p.options } : {}),
           })),
         },
       });

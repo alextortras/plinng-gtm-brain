@@ -158,15 +158,12 @@ const ALL_MOTIONS_ACQUISITION: FunnelConfig = {
 
 // ---- Lookup maps ----
 
-const ACQUISITION_FUNNELS: Record<string, FunnelConfig> = {
-  'paid_ads:slg': PAID_ADS_FUNNEL,
-  'paid_ads:plg': PLG_FUNNEL,
-  'outbound:slg': OUTBOUND_SLG_FUNNEL,
-  'outbound:plg': OUTBOUND_PLG_FUNNEL,
-  'organic:slg': ORGANIC_SLG_FUNNEL,
-  'organic:plg': ORGANIC_PLG_FUNNEL,
-  'partners:slg': PARTNERS_SLG_FUNNEL,
-  'partners:plg': PARTNERS_PLG_FUNNEL,
+const MOTION_FUNNELS: Record<string, FunnelConfig> = {
+  paid_ads: PAID_ADS_FUNNEL,
+  outbound: OUTBOUND_SLG_FUNNEL,
+  organic: ORGANIC_SLG_FUNNEL,
+  partners: PARTNERS_SLG_FUNNEL,
+  plg: PLG_FUNNEL,
 };
 
 // ---- Retention ----
@@ -199,40 +196,16 @@ export const EXPANSION_CONFIG: FunnelConfig = {
   ],
 };
 
-// ---- Filter options ----
-
-export const CHANNEL_OPTIONS = [
-  { value: '', label: 'All Channels' },
-  { value: 'paid_ads', label: 'Paid Ads' },
-  { value: 'outbound', label: 'Outbound' },
-  { value: 'partners', label: 'Partners' },
-  { value: 'organic', label: 'Organic' },
-];
-
-export const MOTION_TYPE_OPTIONS = [
-  { value: '', label: 'All Motions' },
-  { value: 'slg', label: 'SLG' },
-  { value: 'plg', label: 'PLG' },
-];
-
-/** Whether a channel has paid investment (determines CAC vs Conversion Rate in KPIs) */
-export function isPaidChannel(channel: string): boolean {
-  return channel === '' || channel === 'paid_ads';
+/** Whether a motion has paid investment (determines CAC vs Conversion Rate in KPIs) */
+export function isPaidMotion(motion: string): boolean {
+  if (!motion) return true; // "All" defaults to showing CAC
+  return motion === 'paid_ads';
 }
 
-/** Map channel value to API-compatible motion param for data filtering */
-export const CHANNEL_API_MAP: Record<string, string> = {
-  paid_ads: 'paid_ads',
-  outbound: 'outbound',
-  organic: 'organic',
-  partners: 'partners',
-};
-
-/** Get the funnel config for a phase + channel + motion type combination */
-export function getPhaseFunnel(phase: string, channel: string, motionType: string): FunnelConfig {
+/** Get the funnel config for a phase + motion combination */
+export function getPhaseFunnel(phase: string, motion: string): FunnelConfig {
   if (phase === 'retention') return RETENTION_CONFIG;
   if (phase === 'expansion') return EXPANSION_CONFIG;
-  if (!channel || !motionType) return ALL_MOTIONS_ACQUISITION;
-  const key = `${channel}:${motionType}`;
-  return ACQUISITION_FUNNELS[key] ?? ALL_MOTIONS_ACQUISITION;
+  if (!motion) return ALL_MOTIONS_ACQUISITION;
+  return MOTION_FUNNELS[motion] ?? ALL_MOTIONS_ACQUISITION;
 }

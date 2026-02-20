@@ -184,7 +184,7 @@ export default function BrainPage() {
                       )}
                       {insight.market && insight.market !== 'all' && (
                         <Badge variant="secondary">
-                          {insight.market === 'us' ? 'US' : 'Spain'}
+                          {insight.market.toUpperCase()}
                         </Badge>
                       )}
                     </div>

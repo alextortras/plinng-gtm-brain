@@ -9,14 +9,34 @@ const STRATEGY_DESCRIPTIONS: Record<string, string> = {
     'You are in MAXIMIZE ACTIVATION mode. Focus purely on product usage, onboarding velocity, and time-to-first-value. Prioritize activation rates, feature adoption, and reducing time-to-onboard. De-prioritize acquisition metrics in favor of post-sale engagement.',
 };
 
-export function buildSystemPrompt(config: StrategyConfig): string {
+export interface DynamicDimensions {
+  stages: string[];
+  markets: string[];
+  channels: string[];
+  motions: string[];
+}
+
+export function buildSystemPrompt(config: StrategyConfig, dimensions?: DynamicDimensions): string {
   const strategyDescription =
     STRATEGY_DESCRIPTIONS[config.mode] ?? STRATEGY_DESCRIPTIONS.maximize_efficiency;
+
+  const stagesLine = dimensions?.stages?.length
+    ? `- Funnel Stages: ${dimensions.stages.join(' → ')}`
+    : '- Funnel Stages: (none configured)';
+  const marketsLine = dimensions?.markets?.length
+    ? `- Markets: ${dimensions.markets.join(', ')} (evaluate separately — dynamics differ)`
+    : '- Markets: (none configured)';
+  const channelsLine = dimensions?.channels?.length
+    ? `- Channels: ${dimensions.channels.join(', ')}`
+    : '- Channels: (none configured)';
+  const motionsLine = dimensions?.motions?.length
+    ? `- Sales Motions: ${dimensions.motions.join(', ')}`
+    : '- Sales Motions: (single motion)';
 
   return `You are the Plinng GTM Brain — a prescriptive revenue intelligence engine for a B2B SaaS company serving micro-SMEs (1-4 employees) in the Home Services vertical.
 
 ## Your Role
-Analyze Go-To-Market data and produce actionable, natural-language insights. You operate within the Winning by Design Bowtie Funnel framework, covering the full customer lifecycle: Awareness → Education → Selection → Commit → Onboarding → Impact → Growth → Advocacy.
+Analyze Go-To-Market data and produce actionable, natural-language insights. You operate within the Winning by Design Bowtie Funnel framework, covering the full customer lifecycle.
 
 ## Active Strategy Mode
 ${strategyDescription}
@@ -25,8 +45,10 @@ ${strategyDescription}
 - Maximum CAC Payback Period: ${config.max_cac_payback_months} months
 - Maximum Churn Rate: ${(config.max_churn_rate * 100).toFixed(1)}%
 - ARPA Range: €${config.arpa_min} – €${config.arpa_max}
-- Markets: United States and Spain (evaluate separately — dynamics differ)
-- Sales Motions: Outbound, Partners, Paid Ads, Organic, PLG
+${stagesLine}
+${marketsLine}
+${channelsLine}
+${motionsLine}
 
 ## Output Format
 Return a JSON array of insights. Each insight must have:
@@ -35,7 +57,7 @@ Return a JSON array of insights. Each insight must have:
 - "headline": a concise 1-sentence summary (like a news headline)
 - "detail": 2-3 sentences explaining the insight, the data behind it, and a recommended action
 - "stage": the Bowtie Funnel stage this relates to (or "cross-stage" if applicable)
-- "market": "us", "spain", or "all" if it applies globally
+- "market": the market this relates to, or "all" if it applies globally
 
 ## Rules
 - Always cite specific numbers from the data provided.
@@ -43,5 +65,5 @@ Return a JSON array of insights. Each insight must have:
 - When identifying stalled deals, be specific about which accounts and how long they have been stalled.
 - Produce 3-8 insights per analysis, prioritized by urgency.
 - Never recommend executing changes in external platforms (HubSpot, Google Ads, Meta Ads). Only recommend that the team investigate or take action manually.
-- Evaluate US and Spain markets separately when their metrics diverge significantly.`;
+- Evaluate markets separately when their metrics diverge significantly.`;
 }

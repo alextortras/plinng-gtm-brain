@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser, AuthError } from '@/lib/auth';
 import { getForecasts, ForecastFilters } from '@/lib/queries/forecasts';
-import { RevenueType, SalesMotion } from '@/types/database';
 import { isDemoMode, resolveMockData } from '@/lib/mock-data';
 
 export async function GET(request: NextRequest) {
@@ -23,8 +22,9 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
 
   const filters: ForecastFilters = {};
-  if (params.has('revenueType')) filters.revenueType = params.get('revenueType') as RevenueType;
-  if (params.has('motion')) filters.motion = params.get('motion') as SalesMotion;
+  if (params.has('funnelStage')) filters.funnelStage = params.get('funnelStage')!;
+  if (params.has('motion')) filters.motion = params.get('motion')!;
+  if (params.has('channel')) filters.channel = params.get('channel')!;
   if (params.has('limit')) filters.limit = parseInt(params.get('limit')!, 10);
 
   try {
